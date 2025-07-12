@@ -12,6 +12,7 @@ import {
   Badge,
   Spinner,
   Link,
+  IconButton,
 } from "@chakra-ui/react"
 import { FiSearch, FiUser, FiTrash2, FiMessageSquare, FiGithub, FiPlus, FiEdit3, FiExternalLink } from "react-icons/fi"
 
@@ -433,266 +434,264 @@ function CodeSearch() {
   }
 
   return (
-    <Container maxW="6xl" py={8}>
-      <VStack gap={8} align="stretch">
-        {/* Header */}
-        <Box textAlign="center" mb={8}>
-          <Heading size="xl" mb={4}>
-            Agentic Code Search
-          </Heading>
-          <Text fontSize="lg" color="gray.600">
-            Ask questions about your codebase and let our AI agent find the answers
-          </Text>
-        </Box>
-
-        {/* Repo Picker - shown when no session is active */}
-        {!currentSession && (
-          <VStack gap={6} align="stretch">
-            <Box textAlign="center">
-              <Heading size="lg" mb={4}>
-                Choose a Repository
-              </Heading>
-              <Text color="gray.600" mb={6}>
-                Connect a GitHub repository to start analyzing your code
-              </Text>
-            </Box>
-
-            {/* GitHub URL Input */}
-            <Box border="1px" borderColor="gray.200" borderRadius="md" p={6}>
-              <VStack gap={4} align="stretch">
-                <Box>
-                  <Text fontWeight="medium" mb={2}>
-                    GitHub Repository URL
-                  </Text>
-                  <HStack>
-                    <FiGithub color="gray.500" />
-                    <Input
-                      placeholder="https://github.com/username/repository"
-                      value={githubUrl}
-                      onChange={handleUrlChange}
-                      onKeyPress={handleUrlKeyPress}
-                      size="lg"
-                      flex={1}
-                      borderColor={urlError ? "red.300" : "gray.200"}
-                    />
-                  </HStack>
-                  {urlError && (
-                    <Box bg="red.50" p={3} rounded="md" border="1px" borderColor="red.200" mt={2}>
-                      <Text color="red.600" fontSize="sm">{urlError}</Text>
-                    </Box>
-                  )}
-                </Box>
-
-                <Button
-                  onClick={handleCreateSession}
-                  disabled={!githubUrl.trim() || isCreatingSession}
-                  colorScheme="blue"
-                  size="lg"
-                >
-                  <FiPlus />
-                  {isCreatingSession ? "Creating session..." : "Analyze Repository"}
-                </Button>
-              </VStack>
-            </Box>
-
-            {/* Or Separator */}
-            <HStack>
-              <Box flex={1} h="1px" bg="gray.200" />
-              <Text color="gray.500" fontSize="sm">
-                OR
-              </Text>
-              <Box flex={1} h="1px" bg="gray.200" />
-            </HStack>
-
-            {/* Quick Start Option */}
-            <Box border="1px" borderColor="gray.200" borderRadius="md" p={6}>
-              <VStack gap={4} align="stretch">
-                <Box textAlign="center">
-                  <Text fontWeight="medium" mb={2}>
-                    Start Without Repository
-                  </Text>
-                  <Text fontSize="sm" color="gray.600" mb={4}>
-                    Begin a general conversation without connecting to a specific repository
-                  </Text>
-                </Box>
-                <Button
-                  onClick={handleCreateQuickSession}
-                  variant="outline"
-                  size="lg"
-                >
-                  <FiMessageSquare />
-                  Start General Session
-                </Button>
-              </VStack>
-            </Box>
-
-            {/* Popular Repositories Examples */}
-            <Box textAlign="center" mt={6}>
-              <Text fontSize="sm" color="gray.500" mb={3}>
-                Try these popular repositories:
-              </Text>
-              <HStack justify="center" gap={4} flexWrap="wrap">
-                {[
-                  "facebook/react",
-                  "microsoft/vscode",
-                  "vercel/next.js",
-                  "nodejs/node"
-                ].map(repo => (
-                  <Button
-                    key={repo}
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setGithubUrl(`https://github.com/${repo}`)}
-                  >
-                    <FiGithub />
-                    {repo}
-                  </Button>
-                ))}
-              </HStack>
-            </Box>
-          </VStack>
-        )}
-
-        {/* Session Info & Controls */}
-        {currentSession && (
-          <Box>
-            <Flex justify="space-between" align="center" p={4} bg="gray.50" rounded="md" mb={4}>
-              <VStack align="start" gap={2}>
-                <HStack>
-                  <FiMessageSquare />
-                  <Text fontWeight="medium">{currentSession.name}</Text>
-                  {currentSession.github_url && (
+    <Box>
+      {/* Sticky Session Info Bar - only show when there's an active session */}
+      {currentSession && (
+        <Box
+          position="sticky"
+          top={0}
+          bg="white"
+          borderBottom="1px"
+          borderColor="gray.200"
+          zIndex={10}
+          py={2}
+          px={4}
+        >
+          <Container maxW="6xl">
+            <Flex justify="space-between" align="center">
+              <HStack gap={3}>
+                <FiMessageSquare color="gray.600" />
+                <Text fontWeight="medium" fontSize="sm" color="gray.800">
+                  {currentSession.name}
+                </Text>
+                {currentSession.github_url && (
+                  <>
+                    <Text color="gray.400">•</Text>
                     <Link href={currentSession.github_url} target="_blank" rel="noopener noreferrer">
-                      <HStack>
-                        <FiGithub />
+                      <HStack gap={1}>
+                        <FiGithub color="gray.600" />
                         <Text fontSize="sm" color="blue.500">
                           {currentSession.github_url.replace('https://github.com/', '')}
                         </Text>
-                        <FiExternalLink size={12} />
+                        <FiExternalLink size={10} color="gray.500" />
                       </HStack>
                     </Link>
-                  )}
-                </HStack>
-                <HStack>
-                  <Text fontSize="sm" color="gray.500">Agent:</Text>
-                  <select
-                    value={currentSession.agent_type}
-                    onChange={(e) => handleAgentTypeChange(e.target.value)}
-                    style={{
-                      padding: "4px 8px",
-                      borderRadius: "4px",
-                      border: "1px solid #e2e8f0",
-                      backgroundColor: "white",
-                      fontSize: "14px",
-                    }}
-                  >
-                    {availableAgents.map(agent => (
-                      <option key={agent} value={agent}>
-                        {agent.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())}
-                      </option>
-                    ))}
-                  </select>
-                </HStack>
-              </VStack>
-              <Button
+                  </>
+                )}
+              </HStack>
+              
+              <IconButton
                 onClick={handleClearConversation}
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 disabled={currentSession.messages.length === 0}
+                aria-label="Clear Conversation"
+                title="Clear Conversation"
               >
-                <FiTrash2 />
-                Clear Conversation
-              </Button>
+                <FiTrash2 size={16} />
+              </IconButton>
             </Flex>
+          </Container>
+        </Box>
+      )}
 
-            {/* Conversation History */}
-            {currentSession.messages.length > 0 && (
-              <VStack gap={4} align="stretch">
-                <Heading size="md">Conversation</Heading>
-                <Box maxH="600px" overflowY="auto" border="1px" borderColor="gray.200" rounded="md" p={4}>
-                  {currentSession.messages.map((message, index) => (
-                    <Box key={message.id} mb={index === currentSession.messages.length - 1 ? 0 : 6}>
-                      <HStack justify="space-between" mb={2}>
-                        <HStack>
-                          {message.type === "user" ? <FiUser /> : <FiMessageSquare />}
-                          <Text fontWeight="medium">
-                            {message.type === "user" ? "You" : "Agent"}
-                          </Text>
-                          <Text fontSize="sm" color="gray.500">
-                            {message.timestamp.toLocaleTimeString()}
-                          </Text>
-                        </HStack>
-                        <Badge
-                          colorScheme={
-                            message.status === "complete" ? "green" :
-                            message.status === "streaming" ? "blue" :
-                            message.status === "error" ? "red" : "gray"
-                          }
-                        >
-                          {message.status}
-                        </Badge>
-                      </HStack>
-                      
-                      <Box
-                        bg={message.type === "user" ? "blue.50" : "gray.50"}
-                        p={4}
-                        rounded="md"
-                        border="1px"
-                        borderColor={message.type === "user" ? "blue.200" : "gray.200"}
-                      >
-                        {message.status === "streaming" && !message.content ? (
-                          <Flex align="center" gap={2}>
-                            <Spinner size="sm" />
-                            <Text>Agent is thinking...</Text>
-                          </Flex>
-                        ) : message.status === "error" ? (
-                          <Box bg="red.50" p={3} rounded="md" border="1px" borderColor="red.200">
-                            <Text color="red.600" fontWeight="medium">Error!</Text>
-                            <Text color="red.600">{message.content}</Text>
-                          </Box>
-                        ) : (
-                          <Box>{formatMessageContent(message.content)}</Box>
-                        )}
-                      </Box>
-                    </Box>
-                  ))}
-                  <div ref={messagesEndRef} />
-                </Box>
-              </VStack>
-            )}
+      <Container maxW="6xl" py={8}>
+        <VStack gap={8} align="stretch">
+          {/* Header */}
+          <Box textAlign="center" mb={8}>
+            <Heading size="xl" mb={4}>
+              Agentic Code Search
+            </Heading>
+            <Text fontSize="lg" color="gray.600">
+              Ask questions about your codebase and let our AI agent find the answers
+            </Text>
           </Box>
-        )}
 
-        {/* Search Input - only show when there's an active session */}
-        {currentSession && (
-          <Box border="1px" borderColor="gray.200" borderRadius="md" p={6}>
-            <VStack gap={4}>
-              <Textarea
-                placeholder="Ask a question about your codebase... (e.g., 'How does user authentication work?', 'Where is the payment processing logic?')"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyPress={handleKeyPress}
-                rows={3}
-                resize="vertical"
-              />
-              <HStack justify="space-between" w="full">
-                <Text fontSize="sm" color="gray.500">
-                  Press Enter to search, Shift+Enter for new line
+          {/* Repo Picker - shown when no session is active */}
+          {!currentSession && (
+            <VStack gap={6} align="stretch">
+              <Box textAlign="center">
+                <Heading size="lg" mb={4}>
+                  Choose a Repository
+                </Heading>
+                <Text color="gray.600" mb={6}>
+                  Connect a GitHub repository to start analyzing your code
                 </Text>
-                <Button
-                  onClick={handleSearch}
-                  disabled={!query.trim() || isSearching}
-                  colorScheme="blue"
-                >
-                  <FiSearch />
-                  {isSearching ? "Searching..." : "Search"}
-                </Button>
+              </Box>
+
+              {/* GitHub URL Input */}
+              <Box border="1px" borderColor="gray.200" borderRadius="md" p={6}>
+                <VStack gap={4} align="stretch">
+                  <Box>
+                    <Text fontWeight="medium" mb={2}>
+                      GitHub Repository URL
+                    </Text>
+                    <HStack>
+                      <FiGithub color="gray.500" />
+                      <Input
+                        placeholder="https://github.com/username/repository"
+                        value={githubUrl}
+                        onChange={handleUrlChange}
+                        onKeyPress={handleUrlKeyPress}
+                        size="lg"
+                        flex={1}
+                        borderColor={urlError ? "red.300" : "gray.200"}
+                      />
+                    </HStack>
+                    {urlError && (
+                      <Box bg="red.50" p={3} rounded="md" border="1px" borderColor="red.200" mt={2}>
+                        <Text color="red.600" fontSize="sm">{urlError}</Text>
+                      </Box>
+                    )}
+                  </Box>
+
+                  <Button
+                    onClick={handleCreateSession}
+                    disabled={!githubUrl.trim() || isCreatingSession}
+                    colorScheme="blue"
+                    size="lg"
+                  >
+                    <FiPlus />
+                    {isCreatingSession ? "Creating session..." : "Analyze Repository"}
+                  </Button>
+                </VStack>
+              </Box>
+
+              {/* Or Separator */}
+              <HStack>
+                <Box flex={1} h="1px" bg="gray.200" />
+                <Text color="gray.500" fontSize="sm">
+                  OR
+                </Text>
+                <Box flex={1} h="1px" bg="gray.200" />
               </HStack>
+
+              {/* Quick Start Option */}
+              <Box border="1px" borderColor="gray.200" borderRadius="md" p={6}>
+                <VStack gap={4} align="stretch">
+                  <Box textAlign="center">
+                    <Text fontWeight="medium" mb={2}>
+                      Start Without Repository
+                    </Text>
+                    <Text fontSize="sm" color="gray.600" mb={4}>
+                      Begin a general conversation without connecting to a specific repository
+                    </Text>
+                  </Box>
+                  <Button
+                    onClick={handleCreateQuickSession}
+                    variant="outline"
+                    size="lg"
+                  >
+                    <FiMessageSquare />
+                    Start General Session
+                  </Button>
+                </VStack>
+              </Box>
+
+              {/* Popular Repositories Examples */}
+              <Box textAlign="center" mt={6}>
+                <Text fontSize="sm" color="gray.500" mb={3}>
+                  Try these popular repositories:
+                </Text>
+                <HStack justify="center" gap={4} flexWrap="wrap">
+                  {[
+                    "facebook/react",
+                    "microsoft/vscode",
+                    "vercel/next.js",
+                    "nodejs/node"
+                  ].map(repo => (
+                    <Button
+                      key={repo}
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setGithubUrl(`https://github.com/${repo}`)}
+                    >
+                      <FiGithub />
+                      {repo}
+                    </Button>
+                  ))}
+                </HStack>
+              </Box>
             </VStack>
-          </Box>
-        )}
-      </VStack>
-    </Container>
+          )}
+
+          {/* Conversation History */}
+          {currentSession && currentSession.messages.length > 0 && (
+            <VStack gap={4} align="stretch">
+              <Heading size="md">Conversation</Heading>
+              <Box maxH="600px" overflowY="auto" border="1px" borderColor="gray.200" rounded="md" p={4}>
+                {currentSession.messages.map((message, index) => (
+                  <Box key={message.id} mb={index === currentSession.messages.length - 1 ? 0 : 6}>
+                    <HStack justify="space-between" mb={2}>
+                      <HStack>
+                        {message.type === "user" ? <FiUser /> : <FiMessageSquare />}
+                        <Text fontWeight="medium">
+                          {message.type === "user" ? "You" : "Agent"}
+                        </Text>
+                        <Text fontSize="sm" color="gray.500">
+                          {message.timestamp.toLocaleTimeString()}
+                        </Text>
+                      </HStack>
+                      <Badge
+                        colorScheme={
+                          message.status === "complete" ? "green" :
+                          message.status === "streaming" ? "blue" :
+                          message.status === "error" ? "red" : "gray"
+                        }
+                      >
+                        {message.status}
+                      </Badge>
+                    </HStack>
+                    
+                    <Box
+                      bg={message.type === "user" ? "blue.50" : "gray.50"}
+                      p={4}
+                      rounded="md"
+                      border="1px"
+                      borderColor={message.type === "user" ? "blue.200" : "gray.200"}
+                    >
+                      {message.status === "streaming" && !message.content ? (
+                        <Flex align="center" gap={2}>
+                          <Spinner size="sm" />
+                          <Text>Agent is thinking...</Text>
+                        </Flex>
+                      ) : message.status === "error" ? (
+                        <Box bg="red.50" p={3} rounded="md" border="1px" borderColor="red.200">
+                          <Text color="red.600" fontWeight="medium">Error!</Text>
+                          <Text color="red.600">{message.content}</Text>
+                        </Box>
+                      ) : (
+                        <Box>{formatMessageContent(message.content)}</Box>
+                      )}
+                    </Box>
+                  </Box>
+                ))}
+                <div ref={messagesEndRef} />
+              </Box>
+            </VStack>
+          )}
+
+          {/* Search Input - only show when there's an active session */}
+          {currentSession && (
+            <Box border="1px" borderColor="gray.200" borderRadius="md" p={6}>
+              <VStack gap={4}>
+                <Textarea
+                  placeholder="Ask a question about your codebase... (e.g., 'How does user authentication work?', 'Where is the payment processing logic?')"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  rows={3}
+                  resize="vertical"
+                />
+                <HStack justify="space-between" w="full">
+                  <Text fontSize="sm" color="gray.500">
+                    Press Enter to search, Shift+Enter for new line
+                  </Text>
+                  <Button
+                    onClick={handleSearch}
+                    disabled={!query.trim() || isSearching}
+                    colorScheme="blue"
+                  >
+                    <FiSearch />
+                    {isSearching ? "Searching..." : "Search"}
+                  </Button>
+                </HStack>
+              </VStack>
+            </Box>
+          )}
+        </VStack>
+      </Container>
+    </Box>
   )
 }
 
