@@ -13,14 +13,11 @@ logger = logging.getLogger(__name__)
 
 def init_api_key():
     """Initialize the API key for Google Generative AI."""
-    print(f"DEBUG: init_api_key() - mcp_settings.GOOGLE_API_KEY = '{mcp_settings.GOOGLE_API_KEY}'")
-    print(f"DEBUG: init_api_key() - len(mcp_settings.GOOGLE_API_KEY) = {len(mcp_settings.GOOGLE_API_KEY)}")
     if not mcp_settings.GOOGLE_API_KEY:
         logger.error('GOOGLE_API_KEY is not set')
         raise ValueError('GOOGLE_API_KEY is not set')
 
     genai.configure(api_key=mcp_settings.GOOGLE_API_KEY)
-    print(f"DEBUG: init_api_key() - genai.configure() completed")
 
 
 def config_logging():

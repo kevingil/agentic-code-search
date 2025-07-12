@@ -38,61 +38,31 @@ class LangraphPlannerAgent(BaseAgent):
     """Planner Agent backed by LangGraph."""
 
     def __init__(self):
-        print(f"DEBUG: LangraphPlannerAgent.__init__ - calling init_api_key()")
-        try:
-            init_api_key()
-            print(f"DEBUG: LangraphPlannerAgent.__init__ - init_api_key() completed successfully")
-        except Exception as e:
-            print(f"DEBUG: LangraphPlannerAgent.__init__ - init_api_key() failed: {e}")
-            raise
+        init_api_key()
 
         # Set the GOOGLE_API_KEY environment variable for langchain-google-genai
-        print(f"DEBUG: LangraphPlannerAgent.__init__ - setting GOOGLE_API_KEY environment variable")
-        print(f"DEBUG: mcp_settings.GOOGLE_API_KEY = '{mcp_settings.GOOGLE_API_KEY}'")
-        print(f"DEBUG: len(mcp_settings.GOOGLE_API_KEY) = {len(mcp_settings.GOOGLE_API_KEY)}")
         os.environ['GOOGLE_API_KEY'] = mcp_settings.GOOGLE_API_KEY
-        print(f"DEBUG: os.environ['GOOGLE_API_KEY'] = '{os.environ.get('GOOGLE_API_KEY')}'")
-        print(f"DEBUG: LangraphPlannerAgent.__init__ - GOOGLE_API_KEY environment variable set")
 
         logger.info('Initializing LanggraphPlannerAgent')
-        print(f"DEBUG: LangraphPlannerAgent.__init__ - calling super().__init__")
 
         super().__init__(
             agent_name='PlannerAgent',
             description='Breakdown the user request into executable tasks',
             content_types=['text', 'text/plain'],
         )
-        print(f"DEBUG: LangraphPlannerAgent.__init__ - super().__init__ completed")
 
-        print(f"DEBUG: LangraphPlannerAgent.__init__ - creating ChatGoogleGenerativeAI model")
-        try:
-            self.model = ChatGoogleGenerativeAI(
-                model='gemini-2.0-flash', temperature=0.0
-            )
-            print(f"DEBUG: LangraphPlannerAgent.__init__ - ChatGoogleGenerativeAI created successfully")
-        except Exception as e:
-            print(f"DEBUG: LangraphPlannerAgent.__init__ - ChatGoogleGenerativeAI failed: {e}")
-            print(f"DEBUG: Error type: {type(e)}")
-            import traceback
-            print(f"DEBUG: Traceback: {traceback.format_exc()}")
-            raise
+        self.model = ChatGoogleGenerativeAI(
+            model='gemini-2.0-flash', temperature=0.0
+        )
 
-        print(f"DEBUG: LangraphPlannerAgent.__init__ - creating react agent graph")
-        try:
-            self.graph = create_react_agent(
-                self.model,
-                checkpointer=memory,
-                prompt=prompts.PLANNER_COT_INSTRUCTIONS,
-                # prompt=prompts.TRIP_PLANNER_INSTRUCTIONS_1,
-                response_format=ResponseFormat,
-                tools=[],
-            )
-            print(f"DEBUG: LangraphPlannerAgent.__init__ - react agent graph created successfully")
-        except Exception as e:
-            print(f"DEBUG: LangraphPlannerAgent.__init__ - react agent graph creation failed: {e}")
-            raise
-            
-        print(f"DEBUG: LangraphPlannerAgent.__init__ - completed successfully")
+        self.graph = create_react_agent(
+            self.model,
+            checkpointer=memory,
+            prompt=prompts.PLANNER_COT_INSTRUCTIONS,
+            # prompt=prompts.TRIP_PLANNER_INSTRUCTIONS_1,
+            response_format=ResponseFormat,
+            tools=[],
+        )
 
     def invoke(self, query, sessionId) -> str:
         config = {'configurable': {'thread_id': sessionId}}

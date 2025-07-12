@@ -25,33 +25,22 @@ class OrchestratorAgent(BaseAgent):
     """Orchestrator Agent."""
 
     def __init__(self):
-        print(f"DEBUG: OrchestratorAgent.__init__ - calling init_api_key()")
-        try:
-            init_api_key()
-            print(f"DEBUG: OrchestratorAgent.__init__ - init_api_key() completed successfully")
-        except Exception as e:
-            print(f"DEBUG: OrchestratorAgent.__init__ - init_api_key() failed: {e}")
-            raise
+        init_api_key()
             
         # Set the GOOGLE_API_KEY environment variable for Google services
-        print(f"DEBUG: OrchestratorAgent.__init__ - setting GOOGLE_API_KEY environment variable")
         os.environ['GOOGLE_API_KEY'] = mcp_settings.GOOGLE_API_KEY
-        print(f"DEBUG: OrchestratorAgent.__init__ - GOOGLE_API_KEY environment variable set")
             
-        print(f"DEBUG: OrchestratorAgent.__init__ - calling super().__init__")
         super().__init__(
             agent_name='Orchestrator Agent',
             description='Facilitate inter agent communication',
             content_types=['text', 'text/plain'],
         )
-        print(f"DEBUG: OrchestratorAgent.__init__ - super().__init__ completed")
         
         self.graph = None
         self.results = []
         self.travel_context = {}
         self.query_history = []
         self.context_id = None
-        print(f"DEBUG: OrchestratorAgent.__init__ - completed successfully")
 
     async def generate_summary(self) -> str:
         client = genai.Client()
@@ -247,8 +236,50 @@ class OrchestratorAgent(BaseAgent):
                 # When the workflow needs to be resumed, do not yield partial.
                 if not should_resume_workflow:
                     logger.info('No workflow resume detected, yielding chunk')
-                    # Yield partial execution
-                    yield chunk
+                    # Extract relevant data from the chunk and yield as a dictionary
+                    if isinstance(chunk.root, SendStreamingMessageSuccessResponse):
+                        # Convert the response to a JSON-serializable dictionary
+                        chunk_data = {
+                            'response_type': 'text',
+                            'is_task_complete': False,
+                            'require_user_input': False,
+                            'content': 'Processing request...'
+                        }
+                        
+                        # Try to extract more meaningful content if available
+                        if hasattr(chunk.root, 'result') and chunk.root.result:
+                            result = chunk.root.result
+                            if hasattr(result, 'status') and result.status:
+                                if hasattr(result.status, 'message') and result.status.message:
+                                    if hasattr(result.status.message, 'parts') and result.status.message.parts:
+                                        try:
+                                            chunk_data['content'] = result.status.message.parts[0].root.text
+                                        except (AttributeError, IndexError):
+                                            pass
+                        
+                        yield chunk_data
+                    else:
+                        # For other types of chunks, try to convert to dict or use default
+                        try:
+                            if hasattr(chunk, 'model_dump'):
+                                yield chunk.model_dump()
+                            elif hasattr(chunk, 'dict'):
+                                yield chunk.dict()
+                            else:
+                                yield {
+                                    'response_type': 'text',
+                                    'is_task_complete': False,
+                                    'require_user_input': False,
+                                    'content': str(chunk)
+                                }
+                        except Exception as e:
+                            logger.warning(f"Error converting chunk to dict: {e}")
+                            yield {
+                                'response_type': 'text',
+                                'is_task_complete': False,
+                                'require_user_input': False,
+                                'content': 'Processing request...'
+                            }
             # The graph is complete and no updates, so okay to break from the loop.
             if not should_resume_workflow:
                 logger.info(
