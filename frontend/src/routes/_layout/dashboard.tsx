@@ -1,9 +1,10 @@
 import { Box, Container, Text } from "@chakra-ui/react"
 import { createFileRoute } from "@tanstack/react-router"
+import React from "react"
 
 import useAuth from "@/hooks/useAuth"
 
-export const Route = createFileRoute("/_layout/")({
+export const Route = createFileRoute("/_layout/dashboard")({
   component: Dashboard,
 })
 
@@ -23,3 +24,5 @@ function Dashboard() {
     </>
   )
 }
+
+export default Dashboard 
