@@ -1,0 +1,26 @@
+# fly.toml app configuration file generated for agentic-code-search on 2025-07-12T11:30:50-07:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'agentic-code-search'
+primary_region = 'sjc'
+
+[build]
+  dockerfile = 'pg.Dockerfile'
+
+[env]
+  POSTGRES_DB = 'postgres'
+  POSTGRES_USER = 'postgres'
+
+[[services]]
+  internal_port = 5432
+  protocol = 'tcp'
+  
+  [[services.ports]]
+    port = 5432
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
