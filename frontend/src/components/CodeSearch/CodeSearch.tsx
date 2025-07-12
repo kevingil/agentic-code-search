@@ -11,11 +11,12 @@ import {
   Flex,
   Badge,
   Spinner,
+  Link,
 } from "@chakra-ui/react"
-import { FiSearch, FiCode, FiUser, FiTrash2, FiMessageSquare } from "react-icons/fi"
+import { FiSearch, FiUser, FiTrash2, FiMessageSquare, FiGithub, FiPlus, FiEdit3, FiExternalLink } from "react-icons/fi"
 
 import { Button } from "@/components/ui/button"
-import { agentService, type AgentQueryRequest, type StreamChunk } from "@/services/agentService"
+import { agentService, type AgentQueryRequest, type StreamChunk, type CodeSearchSession } from "@/services/agentService"
 
 interface Message {
   id: string
@@ -31,32 +32,107 @@ interface Message {
   }
 }
 
-interface ConversationHistory {
-  messages: Message[]
-  contextId: string
-  agentType: string
+// Utility function to extract repo name from GitHub URL
+const extractRepoNameFromUrl = (url: string): string | null => {
+  try {
+    // Remove trailing slash
+    const cleanUrl = url.replace(/\/$/, "")
+    
+    // Handle different GitHub URL formats
+    const patterns = [
+      /github\.com\/([^\/]+)\/([^\/]+)$/,  // https://github.com/owner/repo
+      /github\.com\/([^\/]+)\/([^\/]+)\/tree\/.*$/,  // https://github.com/owner/repo/tree/branch
+      /github\.com\/([^\/]+)\/([^\/]+)\/.*$/,  // https://github.com/owner/repo/anything
+    ]
+    
+    for (const pattern of patterns) {
+      const match = cleanUrl.match(pattern)
+      if (match) {
+        return `${match[1]}/${match[2]}`
+      }
+    }
+    
+    return null
+  } catch (error) {
+    return null
+  }
+}
+
+// Validate GitHub URL
+const isValidGithubUrl = (url: string): boolean => {
+  try {
+    const urlObj = new URL(url)
+    return urlObj.hostname === 'github.com' && extractRepoNameFromUrl(url) !== null
+  } catch {
+    return false
+  }
 }
 
 function CodeSearch() {
   const [query, setQuery] = useState("")
   const [isSearching, setIsSearching] = useState(false)
-  const [conversation, setConversation] = useState<ConversationHistory>({
-    messages: [],
-    contextId: `context_${Date.now()}`,
-    agentType: "orchestrator", // Default to orchestrator agent
-  })
+  const [currentSession, setCurrentSession] = useState<CodeSearchSession | null>(null)
   const [availableAgents, setAvailableAgents] = useState<string[]>([])
+  const [githubUrl, setGithubUrl] = useState("")
+  const [urlError, setUrlError] = useState<string | null>(null)
+  const [isCreatingSession, setIsCreatingSession] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Scroll to bottom when new messages are added
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [conversation.messages])
+  }, [currentSession?.messages])
 
-  // Load available agents on component mount
+  // Load available agents and session on component mount
   useEffect(() => {
     loadAvailableAgents()
+    loadCurrentSession()
   }, [])
+
+  // Listen for session changes from sidebar
+  useEffect(() => {
+    const handleSessionChange = (event: CustomEvent) => {
+      const { sessionId } = event.detail
+      if (sessionId) {
+        loadSessionById(sessionId)
+      } else {
+        setCurrentSession(null)
+      }
+    }
+
+    // Listen for session list changes to refresh current session data
+    const handleSessionListChange = () => {
+      if (currentSession) {
+        // Refresh current session data
+        const updatedSession = agentService.getSession(currentSession.id)
+        if (updatedSession) {
+          setCurrentSession(updatedSession)
+        } else {
+          // Session was deleted
+          setCurrentSession(null)
+        }
+      }
+    }
+
+    // Listen for repo picker requests from sidebar
+    const handleShowRepoPicker = () => {
+      setCurrentSession(null)
+      // Clear any form state
+      setGithubUrl("")
+      setUrlError(null)
+      setIsCreatingSession(false)
+    }
+
+    window.addEventListener('sessionChanged', handleSessionChange as EventListener)
+    window.addEventListener('sessionListChanged', handleSessionListChange)
+    window.addEventListener('showRepoPicker', handleShowRepoPicker)
+    
+    return () => {
+      window.removeEventListener('sessionChanged', handleSessionChange as EventListener)
+      window.removeEventListener('sessionListChanged', handleSessionListChange)
+      window.removeEventListener('showRepoPicker', handleShowRepoPicker)
+    }
+  }, [currentSession])
 
   const loadAvailableAgents = async () => {
     try {
@@ -64,13 +140,103 @@ function CodeSearch() {
       setAvailableAgents(agents.filter(agent => agent.is_active).map(agent => agent.agent_type))
     } catch (error) {
       console.error("Failed to load agents:", error)
-      // Fallback to default agents
       setAvailableAgents(["orchestrator"])
+    }
+  }
+
+  const loadCurrentSession = () => {
+    const activeSession = agentService.getActiveSession()
+    setCurrentSession(activeSession)
+  }
+
+  const loadSessionById = (sessionId: string) => {
+    const session = agentService.getSession(sessionId)
+    setCurrentSession(session)
+  }
+
+  const handleCreateSession = async () => {
+    if (!githubUrl.trim()) {
+      setUrlError("Please enter a GitHub URL")
+      return
+    }
+
+    if (!isValidGithubUrl(githubUrl.trim())) {
+      setUrlError("Please enter a valid GitHub repository URL")
+      return
+    }
+
+    setIsCreatingSession(true)
+    setUrlError(null)
+
+    try {
+      const repoName = extractRepoNameFromUrl(githubUrl.trim())
+      if (!repoName) {
+        setUrlError("Could not extract repository name from URL")
+        return
+      }
+
+      const session = agentService.createSession(
+        repoName,
+        "orchestrator",
+        githubUrl.trim()
+      )
+      
+      setCurrentSession(session)
+      setGithubUrl("")
+      
+      // Notify sidebar and other components about session changes
+      window.dispatchEvent(new CustomEvent('sessionChanged', { detail: { sessionId: session.id } }))
+      window.dispatchEvent(new CustomEvent('sessionListChanged'))
+      
+    } catch (error) {
+      console.error("Failed to create session:", error)
+      setUrlError("Failed to create session. Please try again.")
+    } finally {
+      setIsCreatingSession(false)
+    }
+  }
+
+  const handleCreateQuickSession = () => {
+    const session = agentService.createSession(
+      `Session ${new Date().toLocaleString()}`,
+      "orchestrator"
+    )
+    setCurrentSession(session)
+    
+    // Notify sidebar and other components about session changes
+    window.dispatchEvent(new CustomEvent('sessionChanged', { detail: { sessionId: session.id } }))
+    window.dispatchEvent(new CustomEvent('sessionListChanged'))
+  }
+
+  const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const url = e.target.value
+    setGithubUrl(url)
+    setUrlError(null)
+  }
+
+  const handleUrlKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault()
+      handleCreateSession()
     }
   }
 
   const handleSearch = async () => {
     if (!query.trim()) return
+
+    // Create a new session if none exists
+    if (!currentSession) {
+      handleCreateQuickSession()
+      // Wait a bit for the session to be created
+      setTimeout(() => {
+        if (query.trim()) {
+          handleSearch()
+        }
+      }, 100)
+      return
+    }
+
+    if (!currentSession) return
 
     const userMessageId = `msg_${Date.now()}`
     const agentMessageId = `msg_${Date.now() + 1}`
@@ -94,10 +260,18 @@ function CodeSearch() {
       metadata: { artifacts: [] },
     }
 
-    setConversation(prev => ({
+    // Add messages to session
+    agentService.addMessageToSession(currentSession.id, userMessage)
+    agentService.addMessageToSession(currentSession.id, agentMessage)
+
+    // Update local state
+    setCurrentSession(prev => prev ? {
       ...prev,
-      messages: [...prev.messages, userMessage, agentMessage],
-    }))
+      messages: [...prev.messages, userMessage, agentMessage]
+    } : null)
+
+    // Notify sidebar about session updates
+    window.dispatchEvent(new CustomEvent('sessionListChanged'))
 
     setIsSearching(true)
     const currentQuery = query
@@ -106,8 +280,9 @@ function CodeSearch() {
     try {
       const request: AgentQueryRequest = {
         query: currentQuery,
-        context_id: conversation.contextId,
-        agent_type: conversation.agentType,
+        context_id: currentSession.id,
+        agent_type: currentSession.agent_type,
+        github_url: currentSession.github_url,
       }
 
       // Stream the agent response
@@ -130,67 +305,73 @@ function CodeSearch() {
         }
 
         // Update the agent message with streaming content
-        setConversation(prev => ({
+        const updatedMessage = {
+          content: fullContent,
+          status: chunk.is_task_complete ? "complete" as const : "streaming" as const,
+          metadata: {
+            ...lastMetadata,
+            artifacts: extractArtifacts(fullContent),
+          },
+        }
+
+        agentService.updateMessageInSession(currentSession.id, agentMessageId, updatedMessage)
+        
+        setCurrentSession(prev => prev ? {
           ...prev,
           messages: prev.messages.map(msg =>
-            msg.id === agentMessageId
-              ? {
-                  ...msg,
-                  content: fullContent,
-                  status: chunk.is_task_complete ? "complete" : "streaming",
-                  metadata: {
-                    ...lastMetadata,
-                    artifacts: extractArtifacts(fullContent),
-                  },
-                }
-              : msg
-          ),
-        }))
+            msg.id === agentMessageId ? { ...msg, ...updatedMessage } : msg
+          )
+        } : null)
       }
 
       // Final update
-      setConversation(prev => ({
+      const finalMessage = {
+        content: fullContent,
+        status: "complete" as const,
+        metadata: {
+          ...lastMetadata,
+          artifacts: extractArtifacts(fullContent),
+        },
+      }
+
+      agentService.updateMessageInSession(currentSession.id, agentMessageId, finalMessage)
+      
+      setCurrentSession(prev => prev ? {
         ...prev,
         messages: prev.messages.map(msg =>
-          msg.id === agentMessageId
-            ? {
-                ...msg,
-                content: fullContent,
-                status: "complete",
-                metadata: {
-                  ...lastMetadata,
-                  artifacts: extractArtifacts(fullContent),
-                },
-              }
-            : msg
-        ),
-      }))
+          msg.id === agentMessageId ? { ...msg, ...finalMessage } : msg
+        )
+      } : null)
+
+      // Notify sidebar about session updates
+      window.dispatchEvent(new CustomEvent('sessionListChanged'))
 
     } catch (error) {
       console.error("Search failed:", error)
       
       // Update agent message with error
-      setConversation(prev => ({
+      const errorMessage = {
+        content: `Error: ${error instanceof Error ? error.message : "Unknown error occurred"}`,
+        status: "error" as const,
+      }
+
+      agentService.updateMessageInSession(currentSession.id, agentMessageId, errorMessage)
+      
+      setCurrentSession(prev => prev ? {
         ...prev,
         messages: prev.messages.map(msg =>
-          msg.id === agentMessageId
-            ? {
-                ...msg,
-                content: `Error: ${error instanceof Error ? error.message : "Unknown error occurred"}`,
-                status: "error",
-              }
-            : msg
-        ),
-      }))
+          msg.id === agentMessageId ? { ...msg, ...errorMessage } : msg
+        )
+      } : null)
 
-      console.error("Search failed:", error)
+      // Notify sidebar about session updates
+      window.dispatchEvent(new CustomEvent('sessionListChanged'))
     } finally {
       setIsSearching(false)
     }
   }
 
   const extractArtifacts = (content: string): any[] => {
-    // Simple artifact extraction - look for code blocks
     const codeBlocks = content.match(/```[\s\S]*?```/g) || []
     return codeBlocks.map((block, index) => ({
       id: `artifact_${index}`,
@@ -200,14 +381,15 @@ function CodeSearch() {
   }
 
   const handleClearConversation = async () => {
+    if (!currentSession) return
+
     try {
-      await agentService.clearAgentContext(conversation.contextId)
-      setConversation({
-        messages: [],
-        contextId: `context_${Date.now()}`,
-        agentType: conversation.agentType,
-      })
-      console.log("Conversation cleared successfully")
+      await agentService.clearAgentContext(currentSession.id)
+      agentService.updateSession(currentSession.id, { messages: [] })
+      setCurrentSession(prev => prev ? { ...prev, messages: [] } : null)
+      
+      // Notify sidebar about session updates
+      window.dispatchEvent(new CustomEvent('sessionListChanged'))
     } catch (error) {
       console.error("Failed to clear conversation:", error)
     }
@@ -221,14 +403,16 @@ function CodeSearch() {
   }
 
   const handleAgentTypeChange = (agentType: string) => {
-    setConversation(prev => ({
-      ...prev,
-      agentType,
-    }))
+    if (!currentSession) return
+    
+    agentService.updateSession(currentSession.id, { agent_type: agentType })
+    setCurrentSession(prev => prev ? { ...prev, agent_type: agentType } : null)
+    
+    // Notify sidebar about session updates
+    window.dispatchEvent(new CustomEvent('sessionListChanged'))
   }
 
   const formatMessageContent = (content: string) => {
-    // Simple formatting - split by code blocks and render appropriately
     const parts = content.split(/(```[\s\S]*?```)/g)
     return parts.map((part, index) => {
       if (part.startsWith("```")) {
@@ -261,128 +445,250 @@ function CodeSearch() {
           </Text>
         </Box>
 
-        {/* Agent Selection & Controls */}
-        <Flex justify="space-between" align="center" p={4} bg="gray.50" rounded="md">
-          <HStack>
-            <Text fontWeight="medium">Agent:</Text>
-            <select
-              value={conversation.agentType}
-              onChange={(e) => handleAgentTypeChange(e.target.value)}
-              style={{
-                padding: "8px 12px",
-                borderRadius: "6px",
-                border: "1px solid #e2e8f0",
-                backgroundColor: "white",
-              }}
-            >
-              {availableAgents.map(agent => (
-                <option key={agent} value={agent}>
-                  {agent.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())}
-                </option>
-              ))}
-            </select>
-          </HStack>
-          <Button
-            onClick={handleClearConversation}
-            variant="outline"
-            size="sm"
-            disabled={conversation.messages.length === 0}
-          >
-            <FiTrash2 />
-            Clear Conversation
-          </Button>
-        </Flex>
+        {/* Repo Picker - shown when no session is active */}
+        {!currentSession && (
+          <VStack gap={6} align="stretch">
+            <Box textAlign="center">
+              <Heading size="lg" mb={4}>
+                Choose a Repository
+              </Heading>
+              <Text color="gray.600" mb={6}>
+                Connect a GitHub repository to start analyzing your code
+              </Text>
+            </Box>
 
-        {/* Conversation History */}
-        {conversation.messages.length > 0 && (
-          <VStack gap={4} align="stretch">
-            <Heading size="md">Conversation</Heading>
-            <Box maxH="600px" overflowY="auto" border="1px" borderColor="gray.200" rounded="md" p={4}>
-                             {conversation.messages.map((message, index) => (
-                 <Box key={message.id} mb={index === conversation.messages.length - 1 ? 0 : 6}>
-                   <HStack justify="space-between" mb={2}>
-                     <HStack>
-                       {message.type === "user" ? <FiUser /> : <FiMessageSquare />}
-                       <Text fontWeight="medium">
-                         {message.type === "user" ? "You" : "Agent"}
-                       </Text>
-                       <Text fontSize="sm" color="gray.500">
-                         {message.timestamp.toLocaleTimeString()}
-                       </Text>
-                     </HStack>
-                     <Badge
-                       colorScheme={
-                         message.status === "complete" ? "green" :
-                         message.status === "streaming" ? "blue" :
-                         message.status === "error" ? "red" : "gray"
-                       }
-                     >
-                       {message.status}
-                     </Badge>
-                   </HStack>
-                   
-                   <Box
-                     bg={message.type === "user" ? "blue.50" : "gray.50"}
-                     p={4}
-                     rounded="md"
-                     border="1px"
-                     borderColor={message.type === "user" ? "blue.200" : "gray.200"}
-                   >
-                     {message.status === "streaming" && !message.content ? (
-                       <Flex align="center" gap={2}>
-                         <Spinner size="sm" />
-                         <Text>Agent is thinking...</Text>
-                       </Flex>
-                     ) : message.status === "error" ? (
-                       <Box bg="red.50" p={3} rounded="md" border="1px" borderColor="red.200">
-                         <Text color="red.600" fontWeight="medium">Error!</Text>
-                         <Text color="red.600">{message.content}</Text>
-                       </Box>
-                     ) : (
-                       <Box>{formatMessageContent(message.content)}</Box>
-                     )}
-                   </Box>
-                 </Box>
-               ))}
-              <div ref={messagesEndRef} />
+            {/* GitHub URL Input */}
+            <Box border="1px" borderColor="gray.200" borderRadius="md" p={6}>
+              <VStack gap={4} align="stretch">
+                <Box>
+                  <Text fontWeight="medium" mb={2}>
+                    GitHub Repository URL
+                  </Text>
+                  <HStack>
+                    <FiGithub color="gray.500" />
+                    <Input
+                      placeholder="https://github.com/username/repository"
+                      value={githubUrl}
+                      onChange={handleUrlChange}
+                      onKeyPress={handleUrlKeyPress}
+                      size="lg"
+                      flex={1}
+                      borderColor={urlError ? "red.300" : "gray.200"}
+                    />
+                  </HStack>
+                  {urlError && (
+                    <Box bg="red.50" p={3} rounded="md" border="1px" borderColor="red.200" mt={2}>
+                      <Text color="red.600" fontSize="sm">{urlError}</Text>
+                    </Box>
+                  )}
+                </Box>
+
+                <Button
+                  onClick={handleCreateSession}
+                  disabled={!githubUrl.trim() || isCreatingSession}
+                  colorScheme="blue"
+                  size="lg"
+                >
+                  <FiPlus />
+                  {isCreatingSession ? "Creating session..." : "Analyze Repository"}
+                </Button>
+              </VStack>
+            </Box>
+
+            {/* Or Separator */}
+            <HStack>
+              <Box flex={1} h="1px" bg="gray.200" />
+              <Text color="gray.500" fontSize="sm">
+                OR
+              </Text>
+              <Box flex={1} h="1px" bg="gray.200" />
+            </HStack>
+
+            {/* Quick Start Option */}
+            <Box border="1px" borderColor="gray.200" borderRadius="md" p={6}>
+              <VStack gap={4} align="stretch">
+                <Box textAlign="center">
+                  <Text fontWeight="medium" mb={2}>
+                    Start Without Repository
+                  </Text>
+                  <Text fontSize="sm" color="gray.600" mb={4}>
+                    Begin a general conversation without connecting to a specific repository
+                  </Text>
+                </Box>
+                <Button
+                  onClick={handleCreateQuickSession}
+                  variant="outline"
+                  size="lg"
+                >
+                  <FiMessageSquare />
+                  Start General Session
+                </Button>
+              </VStack>
+            </Box>
+
+            {/* Popular Repositories Examples */}
+            <Box textAlign="center" mt={6}>
+              <Text fontSize="sm" color="gray.500" mb={3}>
+                Try these popular repositories:
+              </Text>
+              <HStack justify="center" gap={4} flexWrap="wrap">
+                {[
+                  "facebook/react",
+                  "microsoft/vscode",
+                  "vercel/next.js",
+                  "nodejs/node"
+                ].map(repo => (
+                  <Button
+                    key={repo}
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setGithubUrl(`https://github.com/${repo}`)}
+                  >
+                    <FiGithub />
+                    {repo}
+                  </Button>
+                ))}
+              </HStack>
             </Box>
           </VStack>
         )}
 
-        {/* Search Input */}
-        <Box border="1px" borderColor="gray.200" borderRadius="md" p={6}>
-          <VStack gap={4}>
-            <Textarea
-              placeholder="Ask a question about your codebase... (e.g., 'How does user authentication work?', 'Where is the payment processing logic?')"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyPress={handleKeyPress}
-              rows={3}
-              resize="vertical"
-            />
-            <HStack justify="space-between" w="full">
-              <Text fontSize="sm" color="gray.500">
-                Press Enter to search, Shift+Enter for new line
-              </Text>
+        {/* Session Info & Controls */}
+        {currentSession && (
+          <Box>
+            <Flex justify="space-between" align="center" p={4} bg="gray.50" rounded="md" mb={4}>
+              <VStack align="start" gap={2}>
+                <HStack>
+                  <FiMessageSquare />
+                  <Text fontWeight="medium">{currentSession.name}</Text>
+                  {currentSession.github_url && (
+                    <Link href={currentSession.github_url} target="_blank" rel="noopener noreferrer">
+                      <HStack>
+                        <FiGithub />
+                        <Text fontSize="sm" color="blue.500">
+                          {currentSession.github_url.replace('https://github.com/', '')}
+                        </Text>
+                        <FiExternalLink size={12} />
+                      </HStack>
+                    </Link>
+                  )}
+                </HStack>
+                <HStack>
+                  <Text fontSize="sm" color="gray.500">Agent:</Text>
+                  <select
+                    value={currentSession.agent_type}
+                    onChange={(e) => handleAgentTypeChange(e.target.value)}
+                    style={{
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                      border: "1px solid #e2e8f0",
+                      backgroundColor: "white",
+                      fontSize: "14px",
+                    }}
+                  >
+                    {availableAgents.map(agent => (
+                      <option key={agent} value={agent}>
+                        {agent.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())}
+                      </option>
+                    ))}
+                  </select>
+                </HStack>
+              </VStack>
               <Button
-                onClick={handleSearch}
-                disabled={!query.trim() || isSearching}
-                colorScheme="blue"
+                onClick={handleClearConversation}
+                variant="outline"
+                size="sm"
+                disabled={currentSession.messages.length === 0}
               >
-                <FiSearch />
-                {isSearching ? "Searching..." : "Search"}
+                <FiTrash2 />
+                Clear Conversation
               </Button>
-            </HStack>
-          </VStack>
-        </Box>
+            </Flex>
 
-        {/* Empty State */}
-        {conversation.messages.length === 0 && (
-          <Box textAlign="center" py={12}>
-            <FiSearch size={48} style={{ margin: "0 auto 16px" }} />
-            <Text fontSize="lg" color="gray.500">
-              Ask a question about your codebase to get started
-            </Text>
+            {/* Conversation History */}
+            {currentSession.messages.length > 0 && (
+              <VStack gap={4} align="stretch">
+                <Heading size="md">Conversation</Heading>
+                <Box maxH="600px" overflowY="auto" border="1px" borderColor="gray.200" rounded="md" p={4}>
+                  {currentSession.messages.map((message, index) => (
+                    <Box key={message.id} mb={index === currentSession.messages.length - 1 ? 0 : 6}>
+                      <HStack justify="space-between" mb={2}>
+                        <HStack>
+                          {message.type === "user" ? <FiUser /> : <FiMessageSquare />}
+                          <Text fontWeight="medium">
+                            {message.type === "user" ? "You" : "Agent"}
+                          </Text>
+                          <Text fontSize="sm" color="gray.500">
+                            {message.timestamp.toLocaleTimeString()}
+                          </Text>
+                        </HStack>
+                        <Badge
+                          colorScheme={
+                            message.status === "complete" ? "green" :
+                            message.status === "streaming" ? "blue" :
+                            message.status === "error" ? "red" : "gray"
+                          }
+                        >
+                          {message.status}
+                        </Badge>
+                      </HStack>
+                      
+                      <Box
+                        bg={message.type === "user" ? "blue.50" : "gray.50"}
+                        p={4}
+                        rounded="md"
+                        border="1px"
+                        borderColor={message.type === "user" ? "blue.200" : "gray.200"}
+                      >
+                        {message.status === "streaming" && !message.content ? (
+                          <Flex align="center" gap={2}>
+                            <Spinner size="sm" />
+                            <Text>Agent is thinking...</Text>
+                          </Flex>
+                        ) : message.status === "error" ? (
+                          <Box bg="red.50" p={3} rounded="md" border="1px" borderColor="red.200">
+                            <Text color="red.600" fontWeight="medium">Error!</Text>
+                            <Text color="red.600">{message.content}</Text>
+                          </Box>
+                        ) : (
+                          <Box>{formatMessageContent(message.content)}</Box>
+                        )}
+                      </Box>
+                    </Box>
+                  ))}
+                  <div ref={messagesEndRef} />
+                </Box>
+              </VStack>
+            )}
+          </Box>
+        )}
+
+        {/* Search Input - only show when there's an active session */}
+        {currentSession && (
+          <Box border="1px" borderColor="gray.200" borderRadius="md" p={6}>
+            <VStack gap={4}>
+              <Textarea
+                placeholder="Ask a question about your codebase... (e.g., 'How does user authentication work?', 'Where is the payment processing logic?')"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyPress={handleKeyPress}
+                rows={3}
+                resize="vertical"
+              />
+              <HStack justify="space-between" w="full">
+                <Text fontSize="sm" color="gray.500">
+                  Press Enter to search, Shift+Enter for new line
+                </Text>
+                <Button
+                  onClick={handleSearch}
+                  disabled={!query.trim() || isSearching}
+                  colorScheme="blue"
+                >
+                  <FiSearch />
+                  {isSearching ? "Searching..." : "Search"}
+                </Button>
+              </HStack>
+            </VStack>
           </Box>
         )}
       </VStack>
