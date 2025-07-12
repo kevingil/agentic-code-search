@@ -1,3 +1,4 @@
+import os
 import secrets
 import warnings
 from typing import Annotated, Any, Literal
@@ -53,9 +54,9 @@ class Settings(BaseSettings):
     SENTRY_DSN: HttpUrl | None = None
     POSTGRES_SERVER: str
     POSTGRES_PORT: int = 5432
-    POSTGRES_USER: str
-    POSTGRES_PASSWORD: str = ""
-    POSTGRES_DB: str = ""
+    POSTGRES_USER: str = os.getenv("POSTGRES_USER")
+    POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD")
+    POSTGRES_DB: str = os.getenv("POSTGRES_DB")
 
     @computed_field  # type: ignore[prop-decorator]
     @property
