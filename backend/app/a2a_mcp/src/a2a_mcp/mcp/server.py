@@ -77,6 +77,8 @@ def load_agent_cards():
                 try:
                     with file_path.open('r', encoding='utf-8') as f:
                         data = json.load(f)
+                        logger.debug(f"Loaded agent card from {filename}: {type(data)}")
+                        logger.debug(f"Agent card data: {data}")
                         card_uris.append(
                             f'resource://agent_cards/{Path(filename).stem}'
                         )
@@ -100,9 +102,9 @@ def build_agent_card_embeddings() -> pd.DataFrame:
     """Loads agent cards, generates embeddings for them, and returns a DataFrame.
 
     Returns:
-        Optional[pd.DataFrame]: A Pandas DataFrame containing the original
-        'agent_card' data and their corresponding 'Embeddings'. Returns None
-        if no agent cards were loaded initially or if an exception occurred
+        pd.DataFrame: A Pandas DataFrame containing the original
+        'agent_card' data and their corresponding 'Embeddings'. Returns an empty
+        DataFrame if no agent cards were loaded initially or if an exception occurred
         during the embedding generation process.
     """
     card_uris, agent_cards = load_agent_cards()
@@ -116,11 +118,14 @@ def build_agent_card_embeddings() -> pd.DataFrame:
                 lambda row: generate_embeddings(json.dumps(row['agent_card'])),
                 axis=1,
             )
+            logger.info('Done generating embeddings for agent cards')
             return df
-        logger.info('Done generating embeddings for agent cards')
+        else:
+            logger.warning('No agent cards loaded, returning empty DataFrame')
+            return pd.DataFrame()
     except Exception as e:
         logger.error(f'An unexpected error occurred : {e}.', exc_info=True)
-        return None
+        return pd.DataFrame()
 
 
 def serve(host, port, transport):  # noqa: PLR0915
@@ -161,17 +166,54 @@ def serve(host, port, transport):  # noqa: PLR0915
             The json representing the agent card deemed most relevant
             to the input query based on embedding similarity.
         """
-        query_embedding = genai.embed_content(
-            model=MODEL, content=query, task_type='retrieval_query'
-        )
-        dot_products = np.dot(
-            np.stack(df['card_embeddings']), query_embedding['embedding']
-        )
-        best_match_index = np.argmax(dot_products)
-        logger.debug(
-            f'Found best match at index {best_match_index} with score {dot_products[best_match_index]}'
-        )
-        return df.iloc[best_match_index]['agent_card']
+        logger.info(f"find_agent called with query: {query}")
+        
+        try:
+            if df is None or df.empty:
+                logger.error("No agent cards loaded")
+                return json.dumps({"error": "No agent cards available"})
+            
+            query_embedding = genai.embed_content(
+                model=MODEL, content=query, task_type='retrieval_query'
+            )
+            dot_products = np.dot(
+                np.stack(df['card_embeddings']), query_embedding['embedding']
+            )
+            best_match_index = np.argmax(dot_products)
+            logger.debug(
+                f'Found best match at index {best_match_index} with score {dot_products[best_match_index]}'
+            )
+            
+            # Return the agent card as a JSON string
+            agent_card = df.iloc[best_match_index]['agent_card']
+            logger.debug(f"Agent card type: {type(agent_card)}")
+            logger.debug(f"Agent card content: {agent_card}")
+            
+            # Ensure we return a proper JSON string with robust serialization
+            try:
+                if isinstance(agent_card, dict):
+                    # Use a custom JSON encoder that handles non-serializable objects
+                    json_result = json.dumps(agent_card, default=str, ensure_ascii=False)
+                    logger.debug(f"JSON result: {json_result}")
+                    return json_result
+                elif isinstance(agent_card, str):
+                    # If it's already a string, check if it's valid JSON
+                    try:
+                        json.loads(agent_card)  # Validate it's valid JSON
+                        return agent_card
+                    except json.JSONDecodeError:
+                        # If not valid JSON, wrap it
+                        return json.dumps({"content": agent_card}, default=str)
+                else:
+                    # For other types, convert to string and wrap
+                    return json.dumps({"content": str(agent_card)}, default=str)
+            except Exception as serialize_error:
+                logger.error(f"JSON serialization error: {serialize_error}")
+                return json.dumps({"error": f"Serialization failed: {str(serialize_error)}"}, default=str)
+        except Exception as e:
+            logger.error(f"Error in find_agent: {e}")
+            return json.dumps({"error": f"Failed to find agent: {str(e)}"})
+        
 
     @mcp.tool()
     def query_places_data(query: str):
