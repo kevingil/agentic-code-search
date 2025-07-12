@@ -5,6 +5,7 @@ export interface AgentQueryRequest {
   query: string
   context_id: string
   agent_type: string
+  github_url?: string
 }
 
 export interface AgentQueryResponse {
@@ -31,8 +32,31 @@ export interface StreamChunk {
   error?: string
 }
 
+export interface CodeSearchSession {
+  id: string
+  name: string
+  github_url?: string
+  agent_type: string
+  created_at: Date
+  last_used: Date
+  messages: Array<{
+    id: string
+    type: "user" | "agent"
+    content: string
+    timestamp: Date
+    status: "sending" | "streaming" | "complete" | "error"
+    metadata?: any
+  }>
+}
+
+export interface SessionsStorageData {
+  sessions: CodeSearchSession[]
+  activeSessionId: string | null
+}
+
 class AgentService {
   private baseURL: string
+  private storageKey = "codeSearch_sessions"
 
   constructor() {
     this.baseURL = OpenAPI.BASE || "http://localhost:8000"
@@ -141,6 +165,122 @@ class AgentService {
     return this.makeRequest<{ message: string }>(`/api/v1/agents/context/${contextId}`, {
       method: "DELETE",
     })
+  }
+
+  // Session Management Methods
+  private getSessionsData(): SessionsStorageData {
+    const data = localStorage.getItem(this.storageKey)
+    return data ? JSON.parse(data) : { sessions: [], activeSessionId: null }
+  }
+
+  private saveSessionsData(data: SessionsStorageData): void {
+    localStorage.setItem(this.storageKey, JSON.stringify(data))
+  }
+
+  getSessions(): CodeSearchSession[] {
+    const data = this.getSessionsData()
+    return data.sessions.map(session => ({
+      ...session,
+      created_at: new Date(session.created_at),
+      last_used: new Date(session.last_used),
+      messages: session.messages.map(msg => ({
+        ...msg,
+        timestamp: new Date(msg.timestamp)
+      }))
+    }))
+  }
+
+  createSession(name: string, agentType: string = "orchestrator", githubUrl?: string): CodeSearchSession {
+    const session: CodeSearchSession = {
+      id: `session_${Date.now()}`,
+      name,
+      github_url: githubUrl,
+      agent_type: agentType,
+      created_at: new Date(),
+      last_used: new Date(),
+      messages: []
+    }
+
+    const data = this.getSessionsData()
+    data.sessions.unshift(session)
+    data.activeSessionId = session.id
+    this.saveSessionsData(data)
+
+    return session
+  }
+
+  getSession(sessionId: string): CodeSearchSession | null {
+    const sessions = this.getSessions()
+    return sessions.find(s => s.id === sessionId) || null
+  }
+
+  updateSession(sessionId: string, updates: Partial<CodeSearchSession>): void {
+    const data = this.getSessionsData()
+    const sessionIndex = data.sessions.findIndex(s => s.id === sessionId)
+    
+    if (sessionIndex !== -1) {
+      data.sessions[sessionIndex] = {
+        ...data.sessions[sessionIndex],
+        ...updates,
+        last_used: new Date()
+      }
+      this.saveSessionsData(data)
+    }
+  }
+
+  deleteSession(sessionId: string): void {
+    const data = this.getSessionsData()
+    data.sessions = data.sessions.filter(s => s.id !== sessionId)
+    
+    if (data.activeSessionId === sessionId) {
+      data.activeSessionId = data.sessions.length > 0 ? data.sessions[0].id : null
+    }
+    
+    this.saveSessionsData(data)
+  }
+
+  setActiveSession(sessionId: string): void {
+    const data = this.getSessionsData()
+    data.activeSessionId = sessionId
+    this.saveSessionsData(data)
+  }
+
+  clearActiveSession(): void {
+    const data = this.getSessionsData()
+    data.activeSessionId = null
+    this.saveSessionsData(data)
+  }
+
+  getActiveSession(): CodeSearchSession | null {
+    const data = this.getSessionsData()
+    return data.activeSessionId ? this.getSession(data.activeSessionId) : null
+  }
+
+  addMessageToSession(sessionId: string, message: CodeSearchSession['messages'][0]): void {
+    const data = this.getSessionsData()
+    const sessionIndex = data.sessions.findIndex(s => s.id === sessionId)
+    
+    if (sessionIndex !== -1) {
+      data.sessions[sessionIndex].messages.push(message)
+      data.sessions[sessionIndex].last_used = new Date()
+      this.saveSessionsData(data)
+    }
+  }
+
+  updateMessageInSession(sessionId: string, messageId: string, updates: Partial<CodeSearchSession['messages'][0]>): void {
+    const data = this.getSessionsData()
+    const sessionIndex = data.sessions.findIndex(s => s.id === sessionId)
+    
+    if (sessionIndex !== -1) {
+      const messageIndex = data.sessions[sessionIndex].messages.findIndex(m => m.id === messageId)
+      if (messageIndex !== -1) {
+        data.sessions[sessionIndex].messages[messageIndex] = {
+          ...data.sessions[sessionIndex].messages[messageIndex],
+          ...updates
+        }
+        this.saveSessionsData(data)
+      }
+    }
   }
 }
 
