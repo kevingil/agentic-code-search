@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import {
   Box,
   Container,
@@ -12,57 +12,205 @@ import {
   Badge,
   Spinner,
 } from "@chakra-ui/react"
-import { FiSearch, FiCode, FiUser } from "react-icons/fi"
+import { FiSearch, FiCode, FiUser, FiTrash2, FiMessageSquare } from "react-icons/fi"
 
 import { Button } from "@/components/ui/button"
+import { agentService, type AgentQueryRequest, type StreamChunk } from "@/services/agentService"
 
-interface SearchResult {
+interface Message {
   id: string
-  question: string
-  status: "searching" | "complete" | "error"
-  results?: {
-    summary: string
-    files: string[]
-    analysis: string
+  type: "user" | "agent"
+  content: string
+  timestamp: Date
+  status: "sending" | "streaming" | "complete" | "error"
+  metadata?: {
+    response_type?: string
+    is_task_complete?: boolean
+    require_user_input?: boolean
+    artifacts?: any[]
   }
+}
+
+interface ConversationHistory {
+  messages: Message[]
+  contextId: string
+  agentType: string
 }
 
 function CodeSearch() {
   const [query, setQuery] = useState("")
   const [isSearching, setIsSearching] = useState(false)
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [conversation, setConversation] = useState<ConversationHistory>({
+    messages: [],
+    contextId: `context_${Date.now()}`,
+    agentType: "orchestrator", // Default to orchestrator agent
+  })
+  const [availableAgents, setAvailableAgents] = useState<string[]>([])
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Scroll to bottom when new messages are added
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [conversation.messages])
+
+  // Load available agents on component mount
+  useEffect(() => {
+    loadAvailableAgents()
+  }, [])
+
+  const loadAvailableAgents = async () => {
+    try {
+      const agents = await agentService.getAgentsStatus()
+      setAvailableAgents(agents.filter(agent => agent.is_active).map(agent => agent.agent_type))
+    } catch (error) {
+      console.error("Failed to load agents:", error)
+      // Fallback to default agents
+      setAvailableAgents(["orchestrator"])
+    }
+  }
 
   const handleSearch = async () => {
     if (!query.trim()) return
 
-    const searchId = Date.now().toString()
-    const newSearch: SearchResult = {
-      id: searchId,
-      question: query,
-      status: "searching",
+    const userMessageId = `msg_${Date.now()}`
+    const agentMessageId = `msg_${Date.now() + 1}`
+
+    // Add user message
+    const userMessage: Message = {
+      id: userMessageId,
+      type: "user",
+      content: query,
+      timestamp: new Date(),
+      status: "complete",
     }
 
-    setSearchResults(prev => [newSearch, ...prev])
+    // Add agent message placeholder
+    const agentMessage: Message = {
+      id: agentMessageId,
+      type: "agent",
+      content: "",
+      timestamp: new Date(),
+      status: "streaming",
+      metadata: { artifacts: [] },
+    }
+
+    setConversation(prev => ({
+      ...prev,
+      messages: [...prev.messages, userMessage, agentMessage],
+    }))
+
     setIsSearching(true)
+    const currentQuery = query
     setQuery("")
 
-    // Simulate API call - replace with actual API integration later
-    setTimeout(() => {
-      setSearchResults(prev => prev.map(result => 
-        result.id === searchId 
-          ? {
-              ...result,
-              status: "complete",
-              results: {
-                summary: "Found relevant code patterns related to your query.",
-                files: ["src/components/Auth.tsx", "src/hooks/useAuth.ts", "src/api/auth.ts"],
-                analysis: "The authentication system uses JWT tokens with refresh capabilities. The main authentication logic is handled through React hooks and context providers."
+    try {
+      const request: AgentQueryRequest = {
+        query: currentQuery,
+        context_id: conversation.contextId,
+        agent_type: conversation.agentType,
+      }
+
+      // Stream the agent response
+      let fullContent = ""
+      let lastMetadata: any = {}
+
+      for await (const chunk of agentService.streamAgentQuery(request)) {
+        if (chunk.error) {
+          throw new Error(chunk.error)
+        }
+
+        if (chunk.content) {
+          fullContent += chunk.content
+        }
+
+        lastMetadata = {
+          response_type: chunk.response_type,
+          is_task_complete: chunk.is_task_complete,
+          require_user_input: chunk.require_user_input,
+        }
+
+        // Update the agent message with streaming content
+        setConversation(prev => ({
+          ...prev,
+          messages: prev.messages.map(msg =>
+            msg.id === agentMessageId
+              ? {
+                  ...msg,
+                  content: fullContent,
+                  status: chunk.is_task_complete ? "complete" : "streaming",
+                  metadata: {
+                    ...lastMetadata,
+                    artifacts: extractArtifacts(fullContent),
+                  },
+                }
+              : msg
+          ),
+        }))
+      }
+
+      // Final update
+      setConversation(prev => ({
+        ...prev,
+        messages: prev.messages.map(msg =>
+          msg.id === agentMessageId
+            ? {
+                ...msg,
+                content: fullContent,
+                status: "complete",
+                metadata: {
+                  ...lastMetadata,
+                  artifacts: extractArtifacts(fullContent),
+                },
               }
-            }
-          : result
-      ))
+            : msg
+        ),
+      }))
+
+    } catch (error) {
+      console.error("Search failed:", error)
+      
+      // Update agent message with error
+      setConversation(prev => ({
+        ...prev,
+        messages: prev.messages.map(msg =>
+          msg.id === agentMessageId
+            ? {
+                ...msg,
+                content: `Error: ${error instanceof Error ? error.message : "Unknown error occurred"}`,
+                status: "error",
+              }
+            : msg
+        ),
+      }))
+
+      console.error("Search failed:", error)
+    } finally {
       setIsSearching(false)
-    }, 3000)
+    }
+  }
+
+  const extractArtifacts = (content: string): any[] => {
+    // Simple artifact extraction - look for code blocks
+    const codeBlocks = content.match(/```[\s\S]*?```/g) || []
+    return codeBlocks.map((block, index) => ({
+      id: `artifact_${index}`,
+      type: "code",
+      content: block,
+    }))
+  }
+
+  const handleClearConversation = async () => {
+    try {
+      await agentService.clearAgentContext(conversation.contextId)
+      setConversation({
+        messages: [],
+        contextId: `context_${Date.now()}`,
+        agentType: conversation.agentType,
+      })
+      console.log("Conversation cleared successfully")
+    } catch (error) {
+      console.error("Failed to clear conversation:", error)
+    }
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -70,6 +218,34 @@ function CodeSearch() {
       e.preventDefault()
       handleSearch()
     }
+  }
+
+  const handleAgentTypeChange = (agentType: string) => {
+    setConversation(prev => ({
+      ...prev,
+      agentType,
+    }))
+  }
+
+  const formatMessageContent = (content: string) => {
+    // Simple formatting - split by code blocks and render appropriately
+    const parts = content.split(/(```[\s\S]*?```)/g)
+    return parts.map((part, index) => {
+      if (part.startsWith("```")) {
+        return (
+          <Box key={index} bg="gray.900" color="white" p={4} rounded="md" my={2} overflow="auto">
+            <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>
+              <code>{part.slice(3, -3)}</code>
+            </pre>
+          </Box>
+        )
+      }
+      return (
+        <Text key={index} whiteSpace="pre-wrap">
+          {part}
+        </Text>
+      )
+    })
   }
 
   return (
@@ -84,6 +260,94 @@ function CodeSearch() {
             Ask questions about your codebase and let our AI agent find the answers
           </Text>
         </Box>
+
+        {/* Agent Selection & Controls */}
+        <Flex justify="space-between" align="center" p={4} bg="gray.50" rounded="md">
+          <HStack>
+            <Text fontWeight="medium">Agent:</Text>
+            <select
+              value={conversation.agentType}
+              onChange={(e) => handleAgentTypeChange(e.target.value)}
+              style={{
+                padding: "8px 12px",
+                borderRadius: "6px",
+                border: "1px solid #e2e8f0",
+                backgroundColor: "white",
+              }}
+            >
+              {availableAgents.map(agent => (
+                <option key={agent} value={agent}>
+                  {agent.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())}
+                </option>
+              ))}
+            </select>
+          </HStack>
+          <Button
+            onClick={handleClearConversation}
+            variant="outline"
+            size="sm"
+            disabled={conversation.messages.length === 0}
+          >
+            <FiTrash2 />
+            Clear Conversation
+          </Button>
+        </Flex>
+
+        {/* Conversation History */}
+        {conversation.messages.length > 0 && (
+          <VStack gap={4} align="stretch">
+            <Heading size="md">Conversation</Heading>
+            <Box maxH="600px" overflowY="auto" border="1px" borderColor="gray.200" rounded="md" p={4}>
+                             {conversation.messages.map((message, index) => (
+                 <Box key={message.id} mb={index === conversation.messages.length - 1 ? 0 : 6}>
+                   <HStack justify="space-between" mb={2}>
+                     <HStack>
+                       {message.type === "user" ? <FiUser /> : <FiMessageSquare />}
+                       <Text fontWeight="medium">
+                         {message.type === "user" ? "You" : "Agent"}
+                       </Text>
+                       <Text fontSize="sm" color="gray.500">
+                         {message.timestamp.toLocaleTimeString()}
+                       </Text>
+                     </HStack>
+                     <Badge
+                       colorScheme={
+                         message.status === "complete" ? "green" :
+                         message.status === "streaming" ? "blue" :
+                         message.status === "error" ? "red" : "gray"
+                       }
+                     >
+                       {message.status}
+                     </Badge>
+                   </HStack>
+                   
+                   <Box
+                     bg={message.type === "user" ? "blue.50" : "gray.50"}
+                     p={4}
+                     rounded="md"
+                     border="1px"
+                     borderColor={message.type === "user" ? "blue.200" : "gray.200"}
+                   >
+                     {message.status === "streaming" && !message.content ? (
+                       <Flex align="center" gap={2}>
+                         <Spinner size="sm" />
+                         <Text>Agent is thinking...</Text>
+                       </Flex>
+                     ) : message.status === "error" ? (
+                       <Box bg="red.50" p={3} rounded="md" border="1px" borderColor="red.200">
+                         <Text color="red.600" fontWeight="medium">Error!</Text>
+                         <Text color="red.600">{message.content}</Text>
+                       </Box>
+                     ) : (
+                       <Box>{formatMessageContent(message.content)}</Box>
+                     )}
+                   </Box>
+                 </Box>
+               ))}
+              <div ref={messagesEndRef} />
+            </Box>
+          </VStack>
+        )}
 
         {/* Search Input */}
         <Box border="1px" borderColor="gray.200" borderRadius="md" p={6}>
@@ -112,83 +376,8 @@ function CodeSearch() {
           </VStack>
         </Box>
 
-        {/* Search Results */}
-        {searchResults.length > 0 && (
-          <VStack gap={6} align="stretch">
-            <Heading size="md">Search Results</Heading>
-            {searchResults.map((result) => (
-              <Box key={result.id} border="1px" borderColor="gray.200" borderRadius="md" p={6}>
-                <VStack align="stretch" gap={4}>
-                  {/* Question */}
-                  <HStack justify="space-between">
-                    <HStack>
-                      <FiUser />
-                      <Text fontWeight="medium">You asked:</Text>
-                    </HStack>
-                    <Badge
-                      colorScheme={
-                        result.status === "complete" ? "green" : 
-                        result.status === "searching" ? "blue" : "red"
-                      }
-                    >
-                      {result.status === "complete" ? "Complete" : 
-                       result.status === "searching" ? "Searching" : "Error"}
-                    </Badge>
-                  </HStack>
-                  <Text bg="gray.50" p={3} rounded="md">
-                    {result.question}
-                  </Text>
-
-                  {/* Loading State */}
-                  {result.status === "searching" && (
-                    <Flex align="center" justify="center" py={8}>
-                      <VStack gap={4}>
-                        <Spinner size="xl" color="blue.500" />
-                        <Text>AI agent is analyzing your codebase...</Text>
-                      </VStack>
-                    </Flex>
-                  )}
-
-                  {/* Results */}
-                  {result.status === "complete" && result.results && (
-                    <VStack align="stretch" gap={4}>
-                      <HStack>
-                        <FiCode />
-                        <Text fontWeight="medium">Agent Response:</Text>
-                      </HStack>
-                      
-                      <Box bg="blue.50" p={4} rounded="md">
-                        <Text fontWeight="medium" mb={2}>Summary:</Text>
-                        <Text>{result.results.summary}</Text>
-                      </Box>
-
-                      <Box>
-                        <Text fontWeight="medium" mb={2}>Relevant Files:</Text>
-                        <VStack align="start" gap={1}>
-                          {result.results.files.map((file, index) => (
-                            <Badge key={index} variant="outline" colorScheme="blue">
-                              {file}
-                            </Badge>
-                          ))}
-                        </VStack>
-                      </Box>
-
-                      <Box>
-                        <Text fontWeight="medium" mb={2}>Analysis:</Text>
-                        <Text bg="gray.50" p={3} rounded="md">
-                          {result.results.analysis}
-                        </Text>
-                      </Box>
-                    </VStack>
-                  )}
-                </VStack>
-              </Box>
-            ))}
-          </VStack>
-        )}
-
         {/* Empty State */}
-        {searchResults.length === 0 && (
+        {conversation.messages.length === 0 && (
           <Box textAlign="center" py={12}>
             <FiSearch size={48} style={{ margin: "0 auto 16px" }} />
             <Text fontSize="lg" color="gray.500">
