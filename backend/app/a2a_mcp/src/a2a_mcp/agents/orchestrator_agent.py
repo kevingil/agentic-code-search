@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 
 from collections.abc import AsyncIterable
 
@@ -13,6 +14,7 @@ from ..common import prompts
 from ..common.base_agent import BaseAgent
 from ..common.utils import init_api_key
 from ..common.workflow import Status, WorkflowGraph, WorkflowNode
+from ..mcp_config import mcp_settings
 from google import genai
 
 
@@ -23,17 +25,33 @@ class OrchestratorAgent(BaseAgent):
     """Orchestrator Agent."""
 
     def __init__(self):
-        init_api_key()
+        print(f"DEBUG: OrchestratorAgent.__init__ - calling init_api_key()")
+        try:
+            init_api_key()
+            print(f"DEBUG: OrchestratorAgent.__init__ - init_api_key() completed successfully")
+        except Exception as e:
+            print(f"DEBUG: OrchestratorAgent.__init__ - init_api_key() failed: {e}")
+            raise
+            
+        # Set the GOOGLE_API_KEY environment variable for Google services
+        print(f"DEBUG: OrchestratorAgent.__init__ - setting GOOGLE_API_KEY environment variable")
+        os.environ['GOOGLE_API_KEY'] = mcp_settings.GOOGLE_API_KEY
+        print(f"DEBUG: OrchestratorAgent.__init__ - GOOGLE_API_KEY environment variable set")
+            
+        print(f"DEBUG: OrchestratorAgent.__init__ - calling super().__init__")
         super().__init__(
             agent_name='Orchestrator Agent',
             description='Facilitate inter agent communication',
             content_types=['text', 'text/plain'],
         )
+        print(f"DEBUG: OrchestratorAgent.__init__ - super().__init__ completed")
+        
         self.graph = None
         self.results = []
         self.travel_context = {}
         self.query_history = []
         self.context_id = None
+        print(f"DEBUG: OrchestratorAgent.__init__ - completed successfully")
 
     async def generate_summary(self) -> str:
         client = genai.Client()

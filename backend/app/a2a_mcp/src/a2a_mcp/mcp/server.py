@@ -11,16 +11,26 @@ import numpy as np
 import pandas as pd
 import requests
 
-from ..common.utils import init_api_key
+from ..mcp_config import mcp_settings
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.utilities.logging import get_logger
 
 
 logger = get_logger(__name__)
-AGENT_CARDS_DIR = 'agent_cards'
+# Calculate the path to agent_cards directory relative to this file
+AGENT_CARDS_DIR = Path(__file__).parent.parent.parent.parent / 'agent_cards'
 MODEL = 'models/embedding-001'
-SQLLITE_DB = 'travel_agency.db'
+SQLLITE_DB = Path(__file__).parent.parent.parent.parent.parent.parent / 'travel_agency.db'
 PLACES_API_URL = 'https://places.googleapis.com/v1/places:searchText'
+
+
+def init_api_key():
+    """Initialize the API key for Google Generative AI."""
+    if not mcp_settings.GOOGLE_API_KEY:
+        logger.error('GOOGLE_API_KEY is not set')
+        raise ValueError('GOOGLE_API_KEY is not set')
+
+    genai.configure(api_key=mcp_settings.GOOGLE_API_KEY)
 
 
 def generate_embeddings(text):
@@ -54,7 +64,7 @@ def load_agent_cards():
         logger.error(
             f'Agent cards directory not found or is not a directory: {AGENT_CARDS_DIR}'
         )
-        return agent_cards
+        return card_uris, agent_cards
 
     logger.info(f'Loading agent cards from card repo: {AGENT_CARDS_DIR}')
 
@@ -167,45 +177,138 @@ def serve(host, port, transport):  # noqa: PLR0915
     def query_places_data(query: str):
         """Query Google Places."""
         logger.info(f'Search for places : {query}')
-        api_key = os.getenv('GOOGLE_PLACES_API_KEY')
-        if not api_key:
-            logger.info('GOOGLE_PLACES_API_KEY is not set')
-            return {'places': []}
-
-        headers = {
-            'X-Goog-Api-Key': api_key,
-            'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress',
-            'Content-Type': 'application/json',
+        
+        # Return dummy places data instead of calling Google Places API
+        dummy_places = {
+            'places': [
+                {
+                    'id': 'place_1',
+                    'displayName': {
+                        'text': 'Heathrow Airport',
+                        'languageCode': 'en'
+                    },
+                    'formattedAddress': 'London TW6, UK'
+                },
+                {
+                    'id': 'place_2', 
+                    'displayName': {
+                        'text': 'Tower of London',
+                        'languageCode': 'en'
+                    },
+                    'formattedAddress': 'London EC3N 4AB, UK'
+                },
+                {
+                    'id': 'place_3',
+                    'displayName': {
+                        'text': 'London Bridge',
+                        'languageCode': 'en'
+                    },
+                    'formattedAddress': 'London Bridge, London, UK'
+                },
+                {
+                    'id': 'place_4',
+                    'displayName': {
+                        'text': 'Big Ben',
+                        'languageCode': 'en'
+                    },
+                    'formattedAddress': 'Westminster, London SW1A 0AA, UK'
+                },
+                {
+                    'id': 'place_5',
+                    'displayName': {
+                        'text': 'British Museum',
+                        'languageCode': 'en'
+                    },
+                    'formattedAddress': 'Great Russell St, Bloomsbury, London WC1B 3DG, UK'
+                }
+            ]
         }
-        payload = {
-            'textQuery': query,
-            'languageCode': 'en',
-            'maxResultCount': 10,
-        }
+        
+        # Filter places based on query if needed
+        query_lower = query.lower()
+        if 'airport' in query_lower:
+            return {'places': [dummy_places['places'][0]]}  # Return Heathrow
+        elif 'museum' in query_lower:
+            return {'places': [dummy_places['places'][4]]}  # Return British Museum
+        elif 'bridge' in query_lower:
+            return {'places': [dummy_places['places'][2]]}  # Return London Bridge
+        
+        # Return all places by default
+        return dummy_places
 
-        try:
-            response = requests.post(
-                PLACES_API_URL, headers=headers, json=payload
-            )
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.HTTPError as http_err:
-            logger.info(f'HTTP error occurred: {http_err}')
-            logger.info(f'Response content: {response.text}')
-        except requests.exceptions.ConnectionError as conn_err:
-            logger.info(f'Connection error occurred: {conn_err}')
-        except requests.exceptions.Timeout as timeout_err:
-            logger.info(f'Timeout error occurred: {timeout_err}')
-        except requests.exceptions.RequestException as req_err:
-            logger.info(
-                f'An unexpected error occurred with the request: {req_err}'
-            )
-        except json.JSONDecodeError:
-            logger.info(
-                f'Failed to decode JSON response. Raw response: {response.text}'
-            )
+    @mcp.tool()
+    def search_flights(departure_airport: str, arrival_airport: str, start_date: str, end_date: str):
+        """Search for flights with specific parameters."""
+        logger.info(f'Search flights: {departure_airport} to {arrival_airport}, {start_date} to {end_date}')
+        
+        # Return dummy flight search results
+        dummy_flight_results = [
+            {
+                "id": 1,
+                "carrier": "British Airways",
+                "flight_number": "BA287",
+                "departure_airport": departure_airport,
+                "arrival_airport": arrival_airport,
+                "departure_date": start_date,
+                "departure_time": "10:30",
+                "arrival_time": "22:45",
+                "ticket_class": "ECONOMY",
+                "price": 850.00,
+                "duration": "11h 15m"
+            },
+            {
+                "id": 2,
+                "carrier": "Virgin Atlantic", 
+                "flight_number": "VS19",
+                "departure_airport": departure_airport,
+                "arrival_airport": arrival_airport,
+                "departure_date": start_date,
+                "departure_time": "14:20",
+                "arrival_time": "02:35+1",
+                "ticket_class": "BUSINESS",
+                "price": 2400.00,
+                "duration": "11h 15m"
+            }
+        ]
+        
+        return {"flights": dummy_flight_results}
 
-        return {'places': []}
+    @mcp.tool()
+    def search_hotels(location: str, check_in_date: str, check_out_date: str):
+        """Search for hotels with specific parameters."""
+        logger.info(f'Search hotels: {location}, {check_in_date} to {check_out_date}')
+        
+        # Return dummy hotel search results
+        dummy_hotel_results = [
+            {
+                "id": 1,
+                "name": "The Langham London",
+                "location": location,
+                "check_in_date": check_in_date,
+                "check_out_date": check_out_date,
+                "room_type": "SUITE",
+                "hotel_type": "LUXURY",
+                "price_per_night": 450.00,
+                "total_price": 1350.00,  # 3 nights
+                "amenities": ["WiFi", "Spa", "Fitness Center", "Restaurant"],
+                "rating": 4.8
+            },
+            {
+                "id": 2,
+                "name": "Premier Inn London",
+                "location": location,
+                "check_in_date": check_in_date,
+                "check_out_date": check_out_date,
+                "room_type": "STANDARD",
+                "hotel_type": "BUDGET",
+                "price_per_night": 120.00,
+                "total_price": 360.00,  # 3 nights
+                "amenities": ["WiFi", "Restaurant"],
+                "rating": 4.2
+            }
+        ]
+        
+        return {"hotels": dummy_hotel_results}
 
     @mcp.tool()
     def query_travel_data(query: str) -> dict:
@@ -223,28 +326,140 @@ def serve(host, port, transport):  # noqa: PLR0915
             "required": ["query"]
         }
         """
-        # The above is to influence gemini to pickup the tool.
-        logger.info(f'Query sqllite : {query}')
-
-        if not query or not query.strip().upper().startswith('SELECT'):
-            raise ValueError(f'In correct query {query}')
-
-        try:
-            with sqlite3.connect(SQLLITE_DB) as conn:
-                conn.row_factory = sqlite3.Row
-                cursor = conn.cursor()
-                cursor.execute(query)
-                rows = cursor.fetchall()
-                result = {'results': [dict(row) for row in rows]}
-                return json.dumps(result)
-        except Exception as e:
-            logger.error(f'Exception running query {e}')
-            logger.error(traceback.format_exc())
-            if 'no such column' in e:
-                return {
-                    'error': f'Please check your query, {e}. Use the table schema to regenerate the query'
+        # Return dummy data instead of querying real database
+        logger.info(f'Query received: {query}')
+        
+        # Parse the query to determine what type of data to return
+        query_lower = query.lower()
+        
+        if 'flights' in query_lower:
+            # Return dummy flight data
+            dummy_flights = [
+                {
+                    "id": 1,
+                    "carrier": "British Airways",
+                    "flight_number": 287,
+                    "from_airport": "SFO",
+                    "to_airport": "LHR", 
+                    "ticket_class": "BUSINESS",
+                    "price": 2500.00
+                },
+                {
+                    "id": 2,
+                    "carrier": "Virgin Atlantic",
+                    "flight_number": 19,
+                    "from_airport": "SFO",
+                    "to_airport": "LHR",
+                    "ticket_class": "ECONOMY", 
+                    "price": 800.00
+                },
+                {
+                    "id": 3,
+                    "carrier": "British Airways",
+                    "flight_number": 286,
+                    "from_airport": "LHR",
+                    "to_airport": "SFO",
+                    "ticket_class": "BUSINESS",
+                    "price": 2500.00
+                },
+                {
+                    "id": 4,
+                    "carrier": "Virgin Atlantic", 
+                    "flight_number": 20,
+                    "from_airport": "LHR",
+                    "to_airport": "SFO",
+                    "ticket_class": "ECONOMY",
+                    "price": 800.00
                 }
-            return {'error': {e}}
+            ]
+            
+            # Filter based on query parameters if possible
+            if 'business' in query_lower:
+                result_flights = [f for f in dummy_flights if f['ticket_class'] == 'BUSINESS']
+            elif 'economy' in query_lower:
+                result_flights = [f for f in dummy_flights if f['ticket_class'] == 'ECONOMY']
+            else:
+                result_flights = dummy_flights[:2]  # Return first 2 by default
+                
+            return json.dumps({'results': result_flights})
+            
+        elif 'hotels' in query_lower:
+            # Return dummy hotel data
+            dummy_hotels = [
+                {
+                    "id": 1,
+                    "name": "The Langham London",
+                    "city": "London",
+                    "hotel_type": "HOTEL",
+                    "room_type": "SUITE",
+                    "price_per_night": 450.00
+                },
+                {
+                    "id": 2,
+                    "name": "Premier Inn London",
+                    "city": "London", 
+                    "hotel_type": "HOTEL",
+                    "room_type": "STANDARD",
+                    "price_per_night": 120.00
+                },
+                {
+                    "id": 3,
+                    "name": "Cozy London Flat",
+                    "city": "London",
+                    "hotel_type": "AIRBNB",
+                    "room_type": "DOUBLE",
+                    "price_per_night": 85.00
+                }
+            ]
+            
+            # Filter based on query parameters
+            if 'suite' in query_lower:
+                result_hotels = [h for h in dummy_hotels if h['room_type'] == 'SUITE']
+            elif 'airbnb' in query_lower:
+                result_hotels = [h for h in dummy_hotels if h['hotel_type'] == 'AIRBNB']
+            else:
+                result_hotels = dummy_hotels[:2]  # Return first 2 by default
+                
+            return json.dumps({'results': result_hotels})
+            
+        elif 'rental_cars' in query_lower or 'cars' in query_lower:
+            # Return dummy car rental data
+            dummy_cars = [
+                {
+                    "id": 1,
+                    "provider": "Hertz",
+                    "city": "London",
+                    "type_of_car": "SEDAN",
+                    "daily_rate": 65.00
+                },
+                {
+                    "id": 2,
+                    "provider": "Enterprise",
+                    "city": "London", 
+                    "type_of_car": "SUV",
+                    "daily_rate": 85.00
+                },
+                {
+                    "id": 3,
+                    "provider": "Budget",
+                    "city": "London",
+                    "type_of_car": "TRUCK",
+                    "daily_rate": 95.00
+                }
+            ]
+            
+            # Filter based on query parameters
+            if 'suv' in query_lower:
+                result_cars = [c for c in dummy_cars if c['type_of_car'] == 'SUV']
+            elif 'sedan' in query_lower:
+                result_cars = [c for c in dummy_cars if c['type_of_car'] == 'SEDAN']
+            else:
+                result_cars = dummy_cars[:2]  # Return first 2 by default
+                
+            return json.dumps({'results': result_cars})
+        
+        # Default empty result
+        return json.dumps({'results': []})
 
     @mcp.resource('resource://agent_cards/list', mime_type='application/json')
     def get_agent_cards() -> dict:

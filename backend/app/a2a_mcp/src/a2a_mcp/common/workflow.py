@@ -60,26 +60,62 @@ class WorkflowNode:
 
     async def get_planner_resource(self) -> AgentCard | None:
         logger.info(f'Getting resource for node {self.id}')
-        config = get_mcp_server_config()
-        async with client.init_session(
-            config.host, config.port, config.transport
-        ) as session:
-            response = await client.find_resource(
-                session, 'resource://agent_cards/planner_agent'
-            )
-            data = json.loads(response.contents[0].text)
-            return AgentCard(**data['agent_card'][0])
+        print(f"DEBUG: Starting get_planner_resource for node {self.id}")
+        
+        try:
+            config = get_mcp_server_config()
+            print(f"DEBUG: Got config: {config}")
+            
+            print(f"DEBUG: About to create session with init_session")
+            async with client.init_session(
+                config.host, config.port, config.transport
+            ) as session:
+                print(f"DEBUG: Session created successfully, about to find_resource")
+                response = await client.find_resource(
+                    session, 'resource://agent_cards/planner_agent'
+                )
+                print(f"DEBUG: Got response from find_resource")
+                data = json.loads(response.contents[0].text)
+                print(f"DEBUG: Parsed JSON data")
+                result = AgentCard(**data['agent_card'][0])
+                print(f"DEBUG: Created AgentCard successfully: {result.name}")
+                print(f"DEBUG: Agent card url: {result.url}")
+                print(f"DEBUG: Agent card capabilities: {result.capabilities}")
+                return result
+        except Exception as e:
+            print(f"DEBUG: Exception in get_planner_resource: {e}")
+            import traceback
+            print(f"DEBUG: Traceback: {traceback.format_exc()}")
+            raise
 
     async def find_agent_for_task(self) -> AgentCard | None:
         logger.info(f'Find agent for task - {self.task}')
-        config = get_mcp_server_config()
-        async with client.init_session(
-            config.host, config.port, config.transport
-        ) as session:
-            result = await client.find_agent(session, self.task)
-            agent_card_json = json.loads(result.content[0].text)
-            logger.debug(f'Found agent {agent_card_json} for task {self.task}')
-            return AgentCard(**agent_card_json)
+        print(f"DEBUG: Starting find_agent_for_task for task {self.task}")
+        
+        try:
+            config = get_mcp_server_config()
+            print(f"DEBUG: Got config for find_agent: {config}")
+            
+            print(f"DEBUG: About to create session for find_agent")
+            async with client.init_session(
+                config.host, config.port, config.transport
+            ) as session:
+                print(f"DEBUG: Session created for find_agent, calling find_agent")
+                result = await client.find_agent(session, self.task)
+                print(f"DEBUG: Got result from find_agent")
+                agent_card_json = json.loads(result.content[0].text)
+                print(f"DEBUG: Parsed JSON for find_agent")
+                logger.debug(f'Found agent {agent_card_json} for task {self.task}')
+                agent_card = AgentCard(**agent_card_json)
+                print(f"DEBUG: Created AgentCard for find_agent successfully: {agent_card.name}")
+                print(f"DEBUG: Agent card url: {agent_card.url}")
+                print(f"DEBUG: Agent card capabilities: {agent_card.capabilities}")
+                return agent_card
+        except Exception as e:
+            print(f"DEBUG: Exception in find_agent_for_task: {e}")
+            import traceback
+            print(f"DEBUG: Traceback: {traceback.format_exc()}")
+            raise
 
     async def run_node(
         self,
@@ -88,13 +124,31 @@ class WorkflowNode:
         context_id: str,
     ) -> AsyncIterable[dict[str, any]]:
         logger.info(f'Executing node {self.id}')
+        print(f"DEBUG: Starting run_node for {self.id}, node_key: {self.node_key}")
+        
         agent_card = None
-        if self.node_key == 'planner':
-            agent_card = await self.get_planner_resource()
-        else:
-            agent_card = await self.find_agent_for_task()
+        try:
+            if self.node_key == 'planner':
+                print(f"DEBUG: Getting planner resource")
+                agent_card = await self.get_planner_resource()
+                print(f"DEBUG: Got planner resource successfully")
+            else:
+                print(f"DEBUG: Finding agent for task")
+                agent_card = await self.find_agent_for_task()
+                print(f"DEBUG: Found agent for task successfully")
+        except Exception as e:
+            print(f"DEBUG: Error getting agent card: {e}")
+            import traceback
+            print(f"DEBUG: Traceback: {traceback.format_exc()}")
+            raise
+            
+        print(f"DEBUG: About to create httpx client and A2AClient")
+        print(f"DEBUG: Agent card details - Name: {agent_card.name}, URL: {agent_card.url}")
         async with httpx.AsyncClient() as httpx_client:
+            print(f"DEBUG: Created httpx client, creating A2AClient")
+            print(f"DEBUG: Trying to connect to: {agent_card.url}")
             client = A2AClient(httpx_client, agent_card)
+            print(f"DEBUG: Created A2AClient successfully")
 
             payload: dict[str, any] = {
                 'message': {
@@ -105,11 +159,15 @@ class WorkflowNode:
                     'contextId': context_id,
                 },
             }
+            print(f"DEBUG: Created payload, creating request")
             request = SendStreamingMessageRequest(
                 id=str(uuid4()), params=MessageSendParams(**payload)
             )
+            print(f"DEBUG: Created request, starting stream")
             response_stream = client.send_message_streaming(request)
+            print(f"DEBUG: Got response stream, starting iteration")
             async for chunk in response_stream:
+                print(f"DEBUG: Got chunk in response stream")
                 # Save the artifact as a result of the node
                 if isinstance(
                     chunk.root, SendStreamingMessageSuccessResponse

@@ -9,7 +9,6 @@ from app.core.config import settings
 
 
 def custom_generate_unique_id(route: APIRoute) -> str:
-    print(f"GOOGLE_API_KEY: {settings.GOOGLE_API_KEY}")
     if route.tags:
         return f"{route.tags[0]}-{route.name}"
     else:
