@@ -103,14 +103,53 @@ class WorkflowNode:
                 print(f"DEBUG: Session created for find_agent, calling find_agent")
                 result = await client.find_agent(session, self.task)
                 print(f"DEBUG: Got result from find_agent")
-                agent_card_json = json.loads(result.content[0].text)
-                print(f"DEBUG: Parsed JSON for find_agent")
-                logger.debug(f'Found agent {agent_card_json} for task {self.task}')
-                agent_card = AgentCard(**agent_card_json)
-                print(f"DEBUG: Created AgentCard for find_agent successfully: {agent_card.name}")
-                print(f"DEBUG: Agent card url: {agent_card.url}")
-                print(f"DEBUG: Agent card capabilities: {agent_card.capabilities}")
-                return agent_card
+                
+                # Debug the result structure
+                print(f"DEBUG: Result type: {type(result)}")
+                print(f"DEBUG: Result attributes: {dir(result)}")
+                
+                if hasattr(result, 'content') and result.content:
+                    print(f"DEBUG: Result content length: {len(result.content)}")
+                    if len(result.content) > 0:
+                        print(f"DEBUG: First content item: {result.content[0]}")
+                        print(f"DEBUG: First content text: '{result.content[0].text}'")
+                        print(f"DEBUG: First content text length: {len(result.content[0].text)}")
+                        
+                        if result.content[0].text.strip():
+                            try:
+                                agent_card_json = json.loads(result.content[0].text)
+                                print(f"DEBUG: Parsed JSON for find_agent successfully")
+                                
+                                # Check if the response is an error
+                                if isinstance(agent_card_json, dict) and 'error' in agent_card_json:
+                                    error_msg = agent_card_json['error']
+                                    print(f"DEBUG: Error response from find_agent: {error_msg}")
+                                    raise ValueError(f"MCP server error: {error_msg}")
+                                
+                                logger.debug(f'Found agent {agent_card_json} for task {self.task}')
+                                agent_card = AgentCard(**agent_card_json)
+                                print(f"DEBUG: Created AgentCard for find_agent successfully: {agent_card.name}")
+                                print(f"DEBUG: Agent card url: {agent_card.url}")
+                                print(f"DEBUG: Agent card capabilities: {agent_card.capabilities}")
+                                return agent_card
+                            except json.JSONDecodeError as json_error:
+                                print(f"DEBUG: JSON decode error: {json_error}")
+                                print(f"DEBUG: Raw content: '{result.content[0].text}'")
+                                raise
+                            except TypeError as type_error:
+                                print(f"DEBUG: Type error creating AgentCard: {type_error}")
+                                print(f"DEBUG: Agent card JSON: {agent_card_json}")
+                                raise
+                        else:
+                            print(f"DEBUG: Content text is empty or whitespace only")
+                            raise ValueError("Empty response from find_agent tool")
+                    else:
+                        print(f"DEBUG: No content items in result")
+                        raise ValueError("No content in find_agent result")
+                else:
+                    print(f"DEBUG: No content attribute in result")
+                    raise ValueError("No content attribute in find_agent result")
+                    
         except Exception as e:
             print(f"DEBUG: Exception in find_agent_for_task: {e}")
             import traceback

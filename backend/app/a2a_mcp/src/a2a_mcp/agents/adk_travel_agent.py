@@ -25,33 +25,21 @@ class TravelAgent(BaseAgent):
     """Travel Agent backed by ADK."""
 
     def __init__(self, agent_name: str, description: str, instructions: str):
-        print(f"DEBUG: TravelAgent.__init__ - agent_name: {agent_name}")
-        print(f"DEBUG: TravelAgent.__init__ - calling init_api_key()")
-        try:
-            init_api_key()
-            print(f"DEBUG: TravelAgent.__init__ - init_api_key() completed successfully")
-        except Exception as e:
-            print(f"DEBUG: TravelAgent.__init__ - init_api_key() failed: {e}")
-            raise
+        init_api_key()
 
         # Set the GOOGLE_API_KEY environment variable for Google services
-        print(f"DEBUG: TravelAgent.__init__ - setting GOOGLE_API_KEY environment variable")
         os.environ['GOOGLE_API_KEY'] = mcp_settings.GOOGLE_API_KEY
-        print(f"DEBUG: TravelAgent.__init__ - GOOGLE_API_KEY environment variable set")
 
-        print(f"DEBUG: TravelAgent.__init__ - calling super().__init__")
         super().__init__(
             agent_name=agent_name,
             description=description,
             content_types=['text', 'text/plain'],
         )
-        print(f"DEBUG: TravelAgent.__init__ - super().__init__ completed")
 
         logger.info(f'Init {self.agent_name}')
 
         self.instructions = instructions
         self.agent = None
-        print(f"DEBUG: TravelAgent.__init__ - completed successfully")
 
     async def init_agent(self):
         logger.info(f'Initializing {self.agent_name} metadata')
