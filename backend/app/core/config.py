@@ -97,7 +97,7 @@ class Settings(BaseSettings):
     FIRST_SUPERUSER_PASSWORD: str
     
     # Google API Key for AI services
-    GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY")
+    GOOGLE_API_KEY: str
 
     def _check_default_secret(self, var_name: str, value: str | None) -> None:
         if value == "changethis":

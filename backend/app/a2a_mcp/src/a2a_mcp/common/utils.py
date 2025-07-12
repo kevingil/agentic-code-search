@@ -4,6 +4,7 @@ import os
 
 import google.generativeai as genai
 
+from app.core.config import settings
 from .types import ServerConfig
 
 
@@ -12,11 +13,11 @@ logger = logging.getLogger(__name__)
 
 def init_api_key():
     """Initialize the API key for Google Generative AI."""
-    if not os.getenv('GOOGLE_API_KEY'):
+    if not settings.GOOGLE_API_KEY:
         logger.error('GOOGLE_API_KEY is not set')
         raise ValueError('GOOGLE_API_KEY is not set')
 
-    genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
+    genai.configure(api_key=settings.GOOGLE_API_KEY)
 
 
 def config_logging():
