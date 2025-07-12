@@ -14,8 +14,8 @@ from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryPushNotifier, InMemoryTaskStore
 from a2a.types import AgentCard
-from a2a_mcp.common import prompts
-from a2a_mcp.common.agent_executor import GenericAgentExecutor
+from ..common import prompts
+from ..common.agent_executor import GenericAgentExecutor
 from adk_travel_agent import TravelAgent
 from langgraph_planner_agent import LangraphPlannerAgent
 from orchestrator_agent import OrchestratorAgent

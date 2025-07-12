@@ -4,7 +4,7 @@ import os
 
 import google.generativeai as genai
 
-from a2a_mcp.common.types import ServerConfig
+from .types import ServerConfig
 
 
 logger = logging.getLogger(__name__)

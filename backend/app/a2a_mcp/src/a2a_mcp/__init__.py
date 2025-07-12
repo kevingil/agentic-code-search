@@ -2,7 +2,7 @@
 
 import click
 
-from a2a_mcp.mcp import server
+from .mcp import server
 
 
 @click.command()

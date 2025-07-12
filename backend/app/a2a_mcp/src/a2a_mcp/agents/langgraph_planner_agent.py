@@ -5,10 +5,10 @@ import logging
 from collections.abc import AsyncIterable
 from typing import Any, Literal
 
-from a2a_mcp.common import prompts
-from a2a_mcp.common.base_agent import BaseAgent
-from a2a_mcp.common.types import TaskList
-from a2a_mcp.common.utils import init_api_key
+from ..common import prompts
+from ..common.base_agent import BaseAgent
+from ..common.types import TaskList
+from ..common.utils import init_api_key
 from langchain_core.messages import AIMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.checkpoint.memory import MemorySaver

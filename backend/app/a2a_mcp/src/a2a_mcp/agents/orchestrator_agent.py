@@ -9,10 +9,10 @@ from a2a.types import (
     TaskState,
     TaskStatusUpdateEvent,
 )
-from a2a_mcp.common import prompts
-from a2a_mcp.common.base_agent import BaseAgent
-from a2a_mcp.common.utils import init_api_key
-from a2a_mcp.common.workflow import Status, WorkflowGraph, WorkflowNode
+from ..common import prompts
+from ..common.base_agent import BaseAgent
+from ..common.utils import init_api_key
+from ..common.workflow import Status, WorkflowGraph, WorkflowNode
 from google import genai
 
 
