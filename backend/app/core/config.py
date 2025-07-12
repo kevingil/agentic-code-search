@@ -95,6 +95,9 @@ class Settings(BaseSettings):
     EMAIL_TEST_USER: EmailStr = "test@example.com"
     FIRST_SUPERUSER: EmailStr
     FIRST_SUPERUSER_PASSWORD: str
+    
+    # Google API Key for AI services
+    GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY")
 
     def _check_default_secret(self, var_name: str, value: str | None) -> None:
         if value == "changethis":
