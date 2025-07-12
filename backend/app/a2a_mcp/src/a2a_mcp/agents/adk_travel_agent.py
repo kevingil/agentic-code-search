@@ -132,18 +132,43 @@ class TravelAgent(BaseAgent):
                     'require_user_input': False,
                     'content': data,
                 }
-            return_type = 'data'
-            try:
-                data = json.loads(data)
-                return_type = 'data'
-            except Exception as json_e:
-                logger.error(f'Json conversion error {json_e}')
-                return_type = 'text'
+            
+            # Handle string responses
+            if isinstance(data, str):
+                # Check if it's empty or just whitespace
+                if not data.strip():
+                    logger.warning('Received empty response, returning default message')
+                    return {
+                        'response_type': 'text',
+                        'is_task_complete': True,
+                        'require_user_input': False,
+                        'content': 'Task completed successfully.',
+                    }
+                
+                # Try to parse as JSON
+                try:
+                    parsed_data = json.loads(data)
+                    return {
+                        'response_type': 'data',
+                        'is_task_complete': True,
+                        'require_user_input': False,
+                        'content': parsed_data,
+                    }
+                except json.JSONDecodeError as json_e:
+                    logger.info(f'Response is not JSON, treating as text: {json_e}')
+                    return {
+                        'response_type': 'text',
+                        'is_task_complete': True,
+                        'require_user_input': False,
+                        'content': data,
+                    }
+            
+            # Handle other types (fallback)
             return {
-                'response_type': return_type,
+                'response_type': 'text',
                 'is_task_complete': True,
                 'require_user_input': False,
-                'content': data,
+                'content': str(data) if data is not None else 'Task completed successfully.',
             }
         except Exception as e:
             logger.error(f'Error in get_agent_response: {e}')
