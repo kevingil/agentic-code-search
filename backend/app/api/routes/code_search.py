@@ -120,7 +120,7 @@ def create_session(
         
         if existing_session:
             # Update last_used and return existing session
-            existing_session.last_used = datetime.utcnow()
+            existing_session.last_used = datetime.now(datetime.UTC)
             session.add(existing_session)
             session.commit()
             session.refresh(existing_session)
@@ -187,7 +187,7 @@ def update_session(
     
     # Update fields
     session_data = session_update.model_dump(exclude_unset=True)
-    session_data["updated_at"] = datetime.utcnow()
+    session_data["updated_at"] = datetime.now(datetime.UTC)
     
     for field, value in session_data.items():
         setattr(db_session, field, value)
@@ -277,7 +277,7 @@ def regenerate_embeddings(
     
     # Reset embeddings status
     db_session.vector_embeddings_processed = False
-    db_session.updated_at = datetime.utcnow()
+    db_session.updated_at = datetime.now(datetime.UTC)
     session.add(db_session)
     session.commit()
     

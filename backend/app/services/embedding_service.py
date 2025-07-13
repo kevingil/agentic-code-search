@@ -103,7 +103,7 @@ class EmbeddingService:
                     return
                 
                 db_session.vector_embeddings_processed = False
-                db_session.updated_at = datetime.utcnow()
+                db_session.updated_at = datetime.now(datetime.UTC)
                 session.add(db_session)
                 session.commit()
             
@@ -121,7 +121,7 @@ class EmbeddingService:
                 db_session = session.get(CodeSearchSession, session_id)
                 if db_session:
                     db_session.vector_embeddings_processed = True
-                    db_session.updated_at = datetime.utcnow()
+                    db_session.updated_at = datetime.now(datetime.UTC)
                     session.add(db_session)
                     session.commit()
             
@@ -134,7 +134,7 @@ class EmbeddingService:
                 db_session = session.get(CodeSearchSession, session_id)
                 if db_session:
                     db_session.vector_embeddings_processed = False
-                    db_session.updated_at = datetime.utcnow()
+                    db_session.updated_at = datetime.now(datetime.UTC)
                     session.add(db_session)
                     session.commit()
         finally:
@@ -398,10 +398,13 @@ class EmbeddingService:
                 response = genai.embed_content(
                     model=self.EMBEDDING_MODEL,
                     content=content,
-                    task_type='retrieval_document'
+                    output_dimensionality=768
                 )
+
+                embeddings = response['embedding']
+                print(f"embeddings: {len(embeddings)} dimensions")
                 
-                return response['embedding']
+                return embeddings
                 
             except Exception as e:
                 logger.warning(f"Attempt {attempt + 1} failed for embedding generation: {e}")
