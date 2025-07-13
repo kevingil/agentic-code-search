@@ -104,7 +104,7 @@ class CodeSearchSessionBase(SQLModel):
     agent_type: str = Field(default="orchestrator", max_length=100)
     is_active: bool = Field(default=True)
     vector_embeddings_processed: bool = Field(default=False)
-    last_used: datetime = Field(default_factory=datetime.utcnow)
+    last_used: datetime = Field(default_factory=lambda: datetime.now(datetime.UTC))
 
 
 # Properties to receive via API on creation
@@ -128,8 +128,8 @@ class CodeSearchSession(CodeSearchSessionBase, table=True):
     owner_id: uuid.UUID = Field(
         foreign_key="user.id", nullable=False, ondelete="CASCADE"
     )
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(datetime.UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(datetime.UTC))
     owner: User | None = Relationship(back_populates="code_search_sessions")
     embeddings: list["CodeSearchEmbedding"] = Relationship(back_populates="session", cascade_delete=True)
 
@@ -181,9 +181,9 @@ class CodeSearchEmbedding(CodeSearchEmbeddingBase, table=True):
     # Override the embedding_vector field to use pgvector's VECTOR type
     embedding_vector: Optional[List[float]] = Field(
         default=None, 
-        sa_column=Column(Vector(1536))  # 1536 is common for OpenAI embeddings, adjust as needed
+        sa_column=Column(Vector(768))  # 768 dimensions for Google Generative AI embeddings
     )
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(datetime.UTC))
     session: CodeSearchSession | None = Relationship(back_populates="embeddings")
 
 
