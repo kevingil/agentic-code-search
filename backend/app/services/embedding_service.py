@@ -6,7 +6,7 @@ from typing import List, Optional, Dict, Any
 from pathlib import Path
 import logging
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 import subprocess
 import mimetypes
 from sqlmodel import Session, select
@@ -103,7 +103,7 @@ class EmbeddingService:
                     return
                 
                 db_session.vector_embeddings_processed = False
-                db_session.updated_at = datetime.now(datetime.UTC)
+                db_session.updated_at = datetime.now(timezone.utc)
                 session.add(db_session)
                 session.commit()
             
@@ -121,7 +121,7 @@ class EmbeddingService:
                 db_session = session.get(CodeSearchSession, session_id)
                 if db_session:
                     db_session.vector_embeddings_processed = True
-                    db_session.updated_at = datetime.now(datetime.UTC)
+                    db_session.updated_at = datetime.now(timezone.utc)
                     session.add(db_session)
                     session.commit()
             
@@ -134,7 +134,7 @@ class EmbeddingService:
                 db_session = session.get(CodeSearchSession, session_id)
                 if db_session:
                     db_session.vector_embeddings_processed = False
-                    db_session.updated_at = datetime.now(datetime.UTC)
+                    db_session.updated_at = datetime.now(timezone.utc)
                     session.add(db_session)
                     session.commit()
         finally:

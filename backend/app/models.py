@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 
 from pydantic import EmailStr
@@ -104,7 +104,7 @@ class CodeSearchSessionBase(SQLModel):
     agent_type: str = Field(default="orchestrator", max_length=100)
     is_active: bool = Field(default=True)
     vector_embeddings_processed: bool = Field(default=False)
-    last_used: datetime = Field(default_factory=lambda: datetime.now(datetime.UTC))
+    last_used: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 # Properties to receive via API on creation
@@ -128,8 +128,8 @@ class CodeSearchSession(CodeSearchSessionBase, table=True):
     owner_id: uuid.UUID = Field(
         foreign_key="user.id", nullable=False, ondelete="CASCADE"
     )
-    created_at: datetime = Field(default_factory=lambda: datetime.now(datetime.UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(datetime.UTC))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     owner: User | None = Relationship(back_populates="code_search_sessions")
     embeddings: list["CodeSearchEmbedding"] = Relationship(back_populates="session", cascade_delete=True)
 
@@ -183,7 +183,7 @@ class CodeSearchEmbedding(CodeSearchEmbeddingBase, table=True):
         default=None, 
         sa_column=Column(Vector(768))  # 768 dimensions for Google Generative AI embeddings
     )
-    created_at: datetime = Field(default_factory=lambda: datetime.now(datetime.UTC))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     session: CodeSearchSession | None = Relationship(back_populates="embeddings")
 
 

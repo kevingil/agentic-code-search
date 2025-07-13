@@ -1,6 +1,6 @@
 import uuid
 from typing import Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import asyncio
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from sqlmodel import func, select, col
@@ -120,7 +120,7 @@ def create_session(
         
         if existing_session:
             # Update last_used and return existing session
-            existing_session.last_used = datetime.now(datetime.UTC)
+            existing_session.last_used = datetime.now(timezone.utc)
             session.add(existing_session)
             session.commit()
             session.refresh(existing_session)
@@ -187,7 +187,7 @@ def update_session(
     
     # Update fields
     session_data = session_update.model_dump(exclude_unset=True)
-    session_data["updated_at"] = datetime.now(datetime.UTC)
+    session_data["updated_at"] = datetime.now(timezone.utc)
     
     for field, value in session_data.items():
         setattr(db_session, field, value)
@@ -277,7 +277,7 @@ def regenerate_embeddings(
     
     # Reset embeddings status
     db_session.vector_embeddings_processed = False
-    db_session.updated_at = datetime.now(datetime.UTC)
+    db_session.updated_at = datetime.now(timezone.utc)
     session.add(db_session)
     session.commit()
     
