@@ -436,62 +436,59 @@ function CodeSearch() {
   }
 
   return (
-    <Box>
+    <Box h="full" display="flex" flexDirection="column" position="relative">
       {/* Sticky Session Info Bar - only show when there's an active session */}
       {currentSession && (
         <Box
-          position="sticky"
-          top={0}
           bg="white"
           borderBottom="1px"
           borderColor="gray.200"
-          zIndex={10}
           py={2}
           px={4}
+          flexShrink={0}
         >
-          <Container maxW="6xl">
-            <Flex justify="space-between" align="center">
-              <HStack gap={3}>
-                <FiMessageSquare color="gray.600" />
-                <Text fontWeight="medium" fontSize="sm" color="gray.800">
-                  {currentSession.name}
-                </Text>
-                {currentSession.github_url && (
-                  <>
-                    <Text color="gray.400">•</Text>
-                    <Link href={currentSession.github_url} target="_blank" rel="noopener noreferrer">
-                      <HStack gap={1}>
-                        <FiGithub color="gray.600" />
-                        <Text fontSize="sm" color="blue.500">
-                          {currentSession.github_url.replace('https://github.com/', '')}
-                        </Text>
-                        <FiExternalLink size={10} color="gray.500" />
-                      </HStack>
-                    </Link>
-                  </>
-                )}
-              </HStack>
-              
-              <IconButton
-                onClick={handleClearConversation}
-                variant="ghost"
-                size="sm"
-                disabled={currentSession.messages.length === 0}
-                aria-label="Clear Conversation"
-                title="Clear Conversation"
-              >
-                <FiTrash2 size={16} />
-              </IconButton>
-            </Flex>
-          </Container>
+          <Flex justify="space-between" align="center">
+            <HStack gap={3}>
+              <FiMessageSquare color="gray.600" />
+              <Text fontWeight="medium" fontSize="sm" color="gray.800">
+                {currentSession.name}
+              </Text>
+              {currentSession.github_url && (
+                <>
+                  <Text color="gray.400">•</Text>
+                  <Link href={currentSession.github_url} target="_blank" rel="noopener noreferrer">
+                    <HStack gap={1}>
+                      <FiGithub color="gray.600" />
+                      <Text fontSize="sm" color="blue.500">
+                        {currentSession.github_url.replace('https://github.com/', '')}
+                      </Text>
+                      <FiExternalLink size={10} color="gray.500" />
+                    </HStack>
+                  </Link>
+                </>
+              )}
+            </HStack>
+            
+            <IconButton
+              onClick={handleClearConversation}
+              variant="ghost"
+              size="sm"
+              disabled={currentSession.messages.length === 0}
+              aria-label="Clear Conversation"
+              title="Clear Conversation"
+            >
+              <FiTrash2 size={16} />
+            </IconButton>
+          </Flex>
         </Box>
       )}
 
-      <Container maxW="6xl" py={8}>
-        <VStack gap={8} align="stretch">
-          {/* Repo Picker - shown when no session is active */}
-          {!currentSession && (
-            <Box maxW="2xl" mx="auto" minH="70vh" display="flex" flexDirection="column">
+      {/* Main Content Area */}
+      <Box flex={1} overflow="hidden">
+        {/* Repo Picker - shown when no session is active */}
+        {!currentSession && (
+          <Box h="full" display="flex" flexDirection="column" p={4}>
+            <Box maxW="2xl" mx="auto" h="full" display="flex" flexDirection="column">
               <VStack gap={4} align="stretch" flex={1}>
                 {/* Combined Header + GitHub Repository Option */}
                 <Box borderRadius="lg" p={6} bg="white">
@@ -605,94 +602,129 @@ function CodeSearch() {
                 </Box>
               </VStack>
             </Box>
-          )}
+          </Box>
+        )}
 
-          {/* Conversation History */}
-          {currentSession && currentSession.messages.length > 0 && (
-            <VStack gap={4} align="stretch">
-              <Heading size="md">Conversation</Heading>
-              <Box maxH="600px" overflowY="auto" border="1px" borderColor="gray.200" rounded="md" p={4}>
-                {currentSession.messages.map((message, index) => (
-                  <Box key={message.id} mb={index === currentSession.messages.length - 1 ? 0 : 6}>
-                    <HStack justify="space-between" mb={2}>
-                      <HStack>
-                        {message.type === "user" ? <FiUser /> : <FiMessageSquare />}
-                        <Text fontWeight="medium">
-                          {message.type === "user" ? "You" : "Agent"}
-                        </Text>
-                        <Text fontSize="sm" color="gray.500">
-                          {message.timestamp.toLocaleTimeString()}
-                        </Text>
+        {/* Conversation History - when session is active */}
+        {currentSession && (
+          <Box h="full" overflow="auto" pb="140px" px={4}>
+            <Box maxW="4xl" mx="auto" py={4}>
+              {currentSession.messages.length === 0 ? (
+                <Box textAlign="center" py={12}>
+                  <VStack gap={4}>
+                    <FiMessageSquare size={48} color="gray.300" />
+                    <Text fontSize="lg" color="gray.500">
+                      Start a conversation
+                    </Text>
+                    <Text fontSize="sm" color="gray.400">
+                      Ask a question about your codebase to get started
+                    </Text>
+                  </VStack>
+                </Box>
+              ) : (
+                <VStack gap={4} align="stretch">
+                  {currentSession.messages.map((message, index) => (
+                    <Box key={message.id} mb={index === currentSession.messages.length - 1 ? 0 : 6}>
+                      <HStack justify="space-between" mb={2}>
+                        <HStack>
+                          {message.type === "user" ? <FiUser /> : <FiMessageSquare />}
+                          <Text fontWeight="medium">
+                            {message.type === "user" ? "You" : "Agent"}
+                          </Text>
+                          <Text fontSize="sm" color="gray.500">
+                            {message.timestamp.toLocaleTimeString()}
+                          </Text>
+                        </HStack>
+                        <Badge
+                          colorScheme={
+                            message.status === "complete" ? "green" :
+                            message.status === "streaming" ? "blue" :
+                            message.status === "error" ? "red" : "gray"
+                          }
+                        >
+                          {message.status}
+                        </Badge>
                       </HStack>
-                      <Badge
-                        colorScheme={
-                          message.status === "complete" ? "green" :
-                          message.status === "streaming" ? "blue" :
-                          message.status === "error" ? "red" : "gray"
-                        }
+                      
+                      <Box
+                        bg={message.type === "user" ? "blue.50" : "gray.50"}
+                        p={4}
+                        rounded="md"
+                        border="1px"
+                        borderColor={message.type === "user" ? "blue.200" : "gray.200"}
                       >
-                        {message.status}
-                      </Badge>
-                    </HStack>
-                    
-                    <Box
-                      bg={message.type === "user" ? "blue.50" : "gray.50"}
-                      p={4}
-                      rounded="md"
-                      border="1px"
-                      borderColor={message.type === "user" ? "blue.200" : "gray.200"}
-                    >
-                      {message.status === "streaming" && !message.content ? (
-                        <Flex align="center" gap={2}>
-                          <Spinner size="sm" />
-                          <Text>Agent is thinking...</Text>
-                        </Flex>
-                      ) : message.status === "error" ? (
-                        <Box bg="red.50" p={3} rounded="md" border="1px" borderColor="red.200">
-                          <Text color="red.600" fontWeight="medium">Error!</Text>
-                          <Text color="red.600">{message.content}</Text>
-                        </Box>
-                      ) : (
-                        <Box>{formatMessageContent(message.content)}</Box>
-                      )}
+                        {message.status === "streaming" && !message.content ? (
+                          <Flex align="center" gap={2}>
+                            <Spinner size="sm" />
+                            <Text>Agent is thinking...</Text>
+                          </Flex>
+                        ) : message.status === "error" ? (
+                          <Box bg="red.50" p={3} rounded="md" border="1px" borderColor="red.200">
+                            <Text color="red.600" fontWeight="medium">Error!</Text>
+                            <Text color="red.600">{message.content}</Text>
+                          </Box>
+                        ) : (
+                          <Box>{formatMessageContent(message.content)}</Box>
+                        )}
+                      </Box>
                     </Box>
-                  </Box>
-                ))}
-                <div ref={messagesEndRef} />
-              </Box>
-            </VStack>
-          )}
-
-          {/* Search Input - only show when there's an active session */}
-          {currentSession && (
-            <Box border="1px" borderColor="gray.200" borderRadius="md" p={6}>
-              <VStack gap={4}>
-                <Textarea
-                  placeholder="Ask a question about your codebase... (e.g., 'How does user authentication work?', 'Where is the payment processing logic?')"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  rows={3}
-                  resize="vertical"
-                />
-                <HStack justify="space-between" w="full">
-                  <Text fontSize="sm" color="gray.500">
-                    Press Enter to search, Shift+Enter for new line
-                  </Text>
-                  <Button
-                    onClick={handleSearch}
-                    disabled={!query.trim() || isSearching}
-                    colorScheme="blue"
-                  >
-                    <FiSearch />
-                    {isSearching ? "Searching..." : "Search"}
-                  </Button>
-                </HStack>
-              </VStack>
+                  ))}
+                  <div ref={messagesEndRef} />
+                </VStack>
+              )}
             </Box>
-          )}
-        </VStack>
-      </Container>
+          </Box>
+        )}
+      </Box>
+
+      {/* Fixed Chat Input at Bottom - only show when there's an active session */}
+      {currentSession && (
+        <Box
+          position="fixed"
+          bottom={4}
+          left={{ base: 4, md: "calc(320px + 2rem)" }}
+          right={4}
+          bg="white"
+          borderTop="1px"
+          borderColor="gray.200"
+          p={4}
+          shadow="lg"
+          rounded="md"
+          border="1px"
+        >
+          <Box maxW="4xl" mx="auto">
+            <VStack gap={3}>
+              <Textarea
+                placeholder="Ask a question about your codebase... (e.g., 'How does user authentication work?', 'Where is the payment processing logic?')"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyPress={handleKeyPress}
+                rows={3}
+                resize="none"
+                maxH="120px"
+                bg="white"
+                border="1px"
+                borderColor="gray.300"
+                _focus={{ borderColor: "blue.500", boxShadow: "0 0 0 1px #3182ce" }}
+              />
+              <HStack justify="space-between" w="full">
+                <Text fontSize="sm" color="gray.500">
+                  Press Enter to search, Shift+Enter for new line
+                </Text>
+                <Button
+                  onClick={handleSearch}
+                  disabled={!query.trim() || isSearching}
+                  colorScheme="blue"
+                  size="sm"
+                >
+                  <FiSearch />
+                  {isSearching ? "Searching..." : "Search"}
+                </Button>
+              </HStack>
+            </VStack>
+          </Box>
+        </Box>
+      )}
     </Box>
   )
 }
