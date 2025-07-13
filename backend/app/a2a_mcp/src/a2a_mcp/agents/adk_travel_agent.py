@@ -41,7 +41,7 @@ class CodeSearchAgent(BaseAgent):
         self.instructions = instructions
         self.agent = None
 
-    async def init_agent(self):
+    async def init_agent(self, session_id: str = None):
         logger.info(f"Initializing {self.agent_name} metadata")
         config = get_mcp_server_config()
         logger.info(f"MCP Server url={config.url}")
@@ -54,10 +54,26 @@ class CodeSearchAgent(BaseAgent):
         for tool in tools:
             logger.info(f"Loaded tool {tool.name}")
 
+        # Include session context in the instructions
+        session_aware_instructions = self.instructions
+        if session_id:
+            session_aware_instructions = f"""
+SESSION CONTEXT METADATA:
+Your current session ID is: {session_id}
+This represents a specific repository/codebase that has been processed and indexed.
+ALWAYS use this session_id when calling vector_search_code, get_session_files, or search_code_by_file_path.
+
+{self.instructions}
+
+IMPORTANT: You have access to a repository through session ID: {session_id}
+Do NOT ask for repository access or additional information about the repository.
+Start using MCP tools immediately with this session_id to answer the user's question.
+"""
+
         generate_content_config = genai_types.GenerateContentConfig(temperature=0.0)
         self.agent = Agent(
             name=self.agent_name,
-            instruction=self.instructions,
+            instruction=session_aware_instructions,
             model="gemini-2.0-flash",
             disallow_transfer_to_parent=True,
             disallow_transfer_to_peers=True,
@@ -80,7 +96,7 @@ class CodeSearchAgent(BaseAgent):
             raise ValueError("Query cannot be empty")
 
         if not self.agent:
-            await self.init_agent()
+            await self.init_agent(session_id=context_id)
 
         async for chunk in self.runner.run_stream(self.agent, query, context_id):
             logger.info(f"Received chunk {chunk}")
