@@ -680,10 +680,9 @@ def serve(host, port, transport):  # noqa: PLR0915
             )
             
             # Perform the search
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
             try:
-                results = loop.run_until_complete(
+                # Try to run in existing event loop context
+                results = asyncio.run(
                     vector_search_service.search_similar_code(
                         query_embedding=query_embedding['embedding'],
                         session_id=session_uuid,
@@ -691,8 +690,24 @@ def serve(host, port, transport):  # noqa: PLR0915
                         similarity_threshold=similarity_threshold
                     )
                 )
-            finally:
-                loop.close()
+            except RuntimeError:
+                # If there's already a loop running, use asyncio.create_task() approach
+                import concurrent.futures
+                import threading
+                
+                def run_async():
+                    return asyncio.run(
+                        vector_search_service.search_similar_code(
+                            query_embedding=query_embedding['embedding'],
+                            session_id=session_uuid,
+                            limit=limit,
+                            similarity_threshold=similarity_threshold
+                        )
+                    )
+                
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(run_async)
+                    results = future.result()
             
             # Format results
             response = {
@@ -726,14 +741,23 @@ def serve(host, port, transport):  # noqa: PLR0915
                     "error": "Vector search not available. Please configure database connection with POSTGRES_USER, POSTGRES_PASSWORD, and POSTGRES_DB environment variables."
                 })
             
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
             try:
-                sessions = loop.run_until_complete(
+                # Try to run in existing event loop context
+                sessions = asyncio.run(
                     vector_search_service.get_sessions_with_embeddings()
                 )
-            finally:
-                loop.close()
+            except RuntimeError:
+                # If there's already a loop running, use thread pool
+                import concurrent.futures
+                
+                def run_async():
+                    return asyncio.run(
+                        vector_search_service.get_sessions_with_embeddings()
+                    )
+                
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(run_async)
+                    sessions = future.result()
             
             response = {
                 "total_sessions": len(sessions),
@@ -774,14 +798,23 @@ def serve(host, port, transport):  # noqa: PLR0915
             except ValueError:
                 return json.dumps({"error": "Invalid session_id format. Must be a valid UUID."})
             
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
             try:
-                files = loop.run_until_complete(
+                # Try to run in existing event loop context
+                files = asyncio.run(
                     vector_search_service.get_session_files(session_uuid)
                 )
-            finally:
-                loop.close()
+            except RuntimeError:
+                # If there's already a loop running, use thread pool
+                import concurrent.futures
+                
+                def run_async():
+                    return asyncio.run(
+                        vector_search_service.get_session_files(session_uuid)
+                    )
+                
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(run_async)
+                    files = future.result()
             
             response = {
                 "session_id": session_id,
@@ -829,17 +862,29 @@ def serve(host, port, transport):  # noqa: PLR0915
                 except ValueError:
                     return json.dumps({"error": "Invalid session_id format. Must be a valid UUID."})
             
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
             try:
-                results = loop.run_until_complete(
+                # Try to run in existing event loop context
+                results = asyncio.run(
                     vector_search_service.search_by_file_path(
                         file_path_pattern=file_path_pattern,
                         session_id=session_uuid
                     )
                 )
-            finally:
-                loop.close()
+            except RuntimeError:
+                # If there's already a loop running, use thread pool
+                import concurrent.futures
+                
+                def run_async():
+                    return asyncio.run(
+                        vector_search_service.search_by_file_path(
+                            file_path_pattern=file_path_pattern,
+                            session_id=session_uuid
+                        )
+                    )
+                
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(run_async)
+                    results = future.result()
             
             response = {
                 "file_path_pattern": file_path_pattern,
