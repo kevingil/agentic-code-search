@@ -14,7 +14,7 @@ import { Link as RouterLink } from "@tanstack/react-router"
 import { FiSearch, FiCode, FiZap, FiUsers, FiShield, FiTrendingUp } from "react-icons/fi"
 
 import { Button } from "@/components/ui/button"
-import Logo from "/assets/images/fastapi-logo.svg"
+import Logo from "/assets/images/code-search-logo.png"
 
 function LandingPage() {
   return (

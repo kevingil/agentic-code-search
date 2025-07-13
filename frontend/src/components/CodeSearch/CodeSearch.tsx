@@ -108,10 +108,10 @@ function CodeSearch() {
     }
 
     // Listen for session list changes to refresh current session data
-    const handleSessionListChange = () => {
+    const handleSessionListChange = async () => {
       if (currentSession) {
         // Refresh current session data
-        const updatedSession = agentService.getSession(currentSession.id)
+        const updatedSession = await agentService.getSession(currentSession.id)
         if (updatedSession) {
           setCurrentSession(updatedSession)
         } else {
@@ -156,8 +156,8 @@ function CodeSearch() {
     setCurrentSession(activeSession)
   }
 
-  const loadSessionById = (sessionId: string) => {
-    const session = agentService.getSession(sessionId)
+  const loadSessionById = async (sessionId: string) => {
+    const session = await agentService.getSession(sessionId)
     setCurrentSession(session)
   }
 
@@ -182,7 +182,7 @@ function CodeSearch() {
         return
       }
 
-      const session = agentService.createSession(
+      const session = await agentService.createSession(
         repoName,
         "orchestrator",
         githubUrl.trim()
@@ -203,16 +203,20 @@ function CodeSearch() {
     }
   }
 
-  const handleCreateQuickSession = () => {
-    const session = agentService.createSession(
-      `Session ${new Date().toLocaleString()}`,
-      "orchestrator"
-    )
-    setCurrentSession(session)
-    
-    // Notify sidebar and other components about session changes
-    window.dispatchEvent(new CustomEvent('sessionChanged', { detail: { sessionId: session.id } }))
-    window.dispatchEvent(new CustomEvent('sessionListChanged'))
+  const handleCreateQuickSession = async () => {
+    try {
+      const session = await agentService.createSession(
+        `Session ${new Date().toLocaleString()}`,
+        "orchestrator"
+      )
+      setCurrentSession(session)
+      
+      // Notify sidebar and other components about session changes
+      window.dispatchEvent(new CustomEvent('sessionChanged', { detail: { sessionId: session.id } }))
+      window.dispatchEvent(new CustomEvent('sessionListChanged'))
+    } catch (error) {
+      console.error("Failed to create quick session:", error)
+    }
   }
 
   const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -233,14 +237,9 @@ function CodeSearch() {
 
     // Create a new session if none exists
     if (!currentSession) {
-      handleCreateQuickSession()
-      // Wait a bit for the session to be created
-      setTimeout(() => {
-        if (query.trim()) {
-          handleSearch()
-        }
-      }, 100)
-      return
+      await handleCreateQuickSession()
+      // If session creation failed, return
+      if (!currentSession) return
     }
 
     if (!currentSession) return
@@ -534,10 +533,10 @@ function CodeSearch() {
     }
   }
 
-  const handleAgentTypeChange = (agentType: string) => {
+  const handleAgentTypeChange = async (agentType: string) => {
     if (!currentSession) return
     
-    agentService.updateSession(currentSession.id, { agent_type: agentType })
+    await agentService.updateSession(currentSession.id, { agent_type: agentType })
     setCurrentSession(prev => prev ? { ...prev, agent_type: agentType } : null)
     
     // Notify sidebar about session updates
@@ -732,10 +731,21 @@ function CodeSearch() {
     })
   }
 
+  const handleSessionSelect = async (sessionId: string) => {
+    const session = await agentService.getSession(sessionId)
+    setCurrentSession(session)
+  }
+
+  const handleNewSession = () => {
+    setCurrentSession(null)
+  }
+
   return (
-    <Box h="full" display="flex" flexDirection="column" position="relative">
-      {/* Sticky Session Info Bar - only show when there's an active session */}
-      {currentSession && (
+    <Flex h="100vh" position="relative">
+      {/* Main Content */}
+      <Box flex={1} h="full" display="flex" flexDirection="column" position="relative">
+        {/* Sticky Session Info Bar - only show when there's an active session */}
+        {currentSession && (
         <Box
           bg="white"
           borderBottom="1px"
@@ -975,6 +985,7 @@ function CodeSearch() {
       </Box>
 
       {/* Fixed Chat Input at Bottom - only show when there's an active session */}
+      
       {currentSession && (
         <Box
           position="fixed"
@@ -1043,8 +1054,9 @@ function CodeSearch() {
           </Box>
           </Box>
         </Box>
-      )}
-    </Box>
+        )}
+      </Box>
+    </Flex>
   )
 }
 
