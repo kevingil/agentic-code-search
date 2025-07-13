@@ -642,7 +642,7 @@ def serve(host, port, transport):  # noqa: PLR0915
                 dbname="your_db_name",
                 user="your_user",
                 password="your_password",
-                host="your-db-name.internal",  # or "localhost" with proxy
+                host="your-db-name.internal",
                 port=5432,
                 sslmode="require",
             )
