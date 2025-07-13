@@ -1,6 +1,6 @@
 {
-    "name": "Car Rental Agent",
-    "description": "Helps book car rental",
+    "name": "Code Documentation Agent",
+    "description": "Generates and analyzes code documentation and comments",
     "url": "http://localhost:10105/",
     "provider": null,
     "version": "1.0.0",
@@ -26,14 +26,18 @@
     ],
     "skills": [
         {
-            "id": "book_cars",
-            "name": "Book Car Rental",
-            "description": "Helps with booking car rental given a criteria",
+            "id": "code_documentation",
+            "name": "Code Documentation Generation",
+            "description": "Generates comprehensive documentation, docstrings, and comments for code files and functions",
             "tags": [
-                "Book cars"
+                "documentation",
+                "docstrings",
+                "code comments"
             ],
             "examples": [
-                "Book a rental car in London, starting on June 20, 2025, and ending on July 10, 2025"
+                "Generate comprehensive API documentation",
+                "Create docstrings for Python functions",
+                "Analyze and improve existing code comments"
             ],
             "inputModes": null,
             "outputModes": null

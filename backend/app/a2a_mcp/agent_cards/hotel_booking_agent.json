@@ -1,6 +1,6 @@
 {
-    "name": "Hotel Booking Agent",
-    "description": "Helps book hotels given a criteria",
+    "name": "Code Analysis Agent",
+    "description": "Performs static code analysis and code quality assessment",
     "url": "http://localhost:10104/",
     "provider": null,
     "version": "1.0.0",
@@ -26,14 +26,18 @@
     ],
     "skills": [
         {
-            "id": "book_accomodation",
-            "name": "Book Hotels",
-            "description": "Helps with booking hotels given a criteria",
+            "id": "code_analysis",
+            "name": "Static Code Analysis",
+            "description": "Analyzes code quality, identifies patterns, suggests improvements, and detects potential issues",
             "tags": [
-                "Book accomodation"
+                "static analysis",
+                "code quality",
+                "refactoring suggestions"
             ],
             "examples": [
-                "Book a hotel for 1 adult in Central London, starting June 24 2025 for 2 nights"
+                "Analyze code complexity and suggest refactoring opportunities",
+                "Find potential security vulnerabilities",
+                "Identify code duplication and design patterns"
             ],
             "inputModes": null,
             "outputModes": null
