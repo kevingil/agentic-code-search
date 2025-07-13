@@ -8,16 +8,15 @@ import io
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-
 import google.generativeai as genai
 import numpy as np
 import pandas as pd
 import requests
-
+import tempfile
 from ..mcp_config import mcp_settings
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.utilities.logging import get_logger
-
+import psycopg2
 
 logger = get_logger(__name__)
 # Calculate the path to agent_cards directory relative to this file
@@ -27,6 +26,7 @@ SQLLITE_DB = (
     Path(__file__).parent.parent.parent.parent.parent.parent / "travel_agency.db"
 )
 PLACES_API_URL = "https://places.googleapis.com/v1/places:searchText"
+ALLOWED_EXTENSIONS = {".py", ".md", ".txt", ".c", ".cpp", ".js"}  # Customize this list
 
 
 def init_api_key():
@@ -524,6 +524,70 @@ def serve(host, port, transport):  # noqa: PLR0915
             if response.status_code != 200:
                 raise Exception("Could not download repository ZIP.")
         return zipfile.ZipFile(io.BytesIO(response.content))
+
+    @mcp.tool()
+    def save_repo_to_vector_db(zip_file: zipfile.ZipFile) -> str:
+        """Save repository content to a vector database."""
+        try:
+            conn = psycopg2.connect(
+                dbname="your_db_name",
+                user="your_user",
+                password="your_password",
+                host="your-db-name.internal",  # or "localhost" with proxy
+                port=5432,
+                sslmode="require",
+            )
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS repo_files (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    file_name TEXT,
+                    content TEXT,
+                    embedding BLOB
+                )
+                """
+            )
+
+            for file_info in zip_file.infolist():
+                if not file_info.is_dir() and file_info.filename.endswith(".py"):
+                    with zip_file.open(file_info) as f:
+                        content = f.read().decode("utf-8")
+                        embedding = generate_embeddings(content)
+                        cursor.execute(
+                            "INSERT INTO repo_files (file_name, content, embedding) VALUES (?, ?, ?)",
+                            (file_info.filename, content, json.dumps(embedding)),
+                        )
+
+            conn.commit()
+            conn.close()
+            return "Repository saved to vector database successfully."
+        except Exception as e:
+            logger.error(f"Error saving repo to vector DB: {e}")
+            return f"Error saving repo to vector DB: {e}"
+
+    @mcp.tool()
+    def extract_text_files(zip_file: zipfile.ZipFile):
+        """Extract text/code files from the ZIP and return as {filename: content}"""
+        file_contents = {}
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            zip_file.extractall(tmpdirname)
+            for root, _, files in os.walk(tmpdirname):
+                for file in files:
+                    ext = os.path.splitext(file)[1]
+                    if ext in ALLOWED_EXTENSIONS:
+                        file_path = os.path.join(root, file)
+                        try:
+                            with open(file_path, "r", encoding="utf-8") as f:
+                                content = f.read()
+                                if content.strip():  # Skip empty files
+                                    relative_path = os.path.relpath(
+                                        file_path, tmpdirname
+                                    )
+                                    file_contents[relative_path] = content
+                        except Exception:
+                            pass  # Skip unreadable files
+        return file_contents
 
     @mcp.resource("resource://agent_cards/list", mime_type="application/json")
     def get_agent_cards() -> dict:
