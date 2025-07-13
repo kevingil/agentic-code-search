@@ -398,7 +398,7 @@ function CodeSearch() {
     }
   }
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       if (e.ctrlKey || e.metaKey) {
         // Ctrl+Enter (Windows/Linux) or Cmd+Enter (macOS): always submit
@@ -615,7 +615,7 @@ function CodeSearch() {
 
         {/* Conversation History - when session is active */}
         {currentSession && (
-          <Box h="full" overflow="auto" pb="190px" px={4}>
+          <Box h="full" overflow="auto" pb="210px" px={4}>
             <Box maxW="4xl" mx="auto" py={4}>
               {currentSession.messages.length === 0 ? (
                 <Box textAlign="center" py={12}>
@@ -719,19 +719,26 @@ function CodeSearch() {
                 placeholder="Ask a question about your codebase... (e.g., 'How does user authentication work?', 'Where is the payment processing logic?')"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                onKeyPress={handleKeyPress}
-                rows={3}
+                onKeyDown={handleKeyDown}
+                rows={4}
                 resize="none"
-                h="120px"
-                maxH="120px"
-                bg="white"
-                border="1px"
-                borderColor="gray.300"
-                _focus={{ borderColor: "blue.500", boxShadow: "0 0 0 1px #3182ce" }}
+                h="140px"
+                maxH="140px"
+                bg="transparent"
+                border="none"
+                outline="none"
+                fontSize="xl"
+                _focus={{ 
+                  outline: "none",
+                  boxShadow: "none"
+                }}
+                _placeholder={{
+                  color: "gray.400"
+                }}
               />
               <HStack justify="space-between" w="full">
                 <Text fontSize="sm" color="gray.500">
-                  Press Enter or Cmd+Enter to search, Shift+Enter for new line
+                  Shift+Enter for new line
                 </Text>
                 <Button
                   onClick={handleSearch}
