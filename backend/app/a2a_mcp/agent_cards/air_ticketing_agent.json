@@ -1,6 +1,6 @@
 {
-    "name": "Air Ticketing Agent",
-    "description": "Helps book air tickets given a criteria",
+    "name": "Code Search Agent",
+    "description": "Performs semantic code search and analysis across codebases",
     "url": "http://localhost:10103/",
     "provider": null,
     "version": "1.0.0",
@@ -26,14 +26,18 @@
     ],
     "skills": [
         {
-            "id": "book_air_tickets",
-            "name": "Book Air Tickets",
-            "description": "Helps with booking air tickets given a criteria",
+            "id": "semantic_search",
+            "name": "Semantic Code Search",
+            "description": "Performs semantic search across codebases to find relevant code patterns, functions, and implementations",
             "tags": [
-                "Book air tickets"
+                "semantic search",
+                "code analysis",
+                "pattern matching"
             ],
             "examples": [
-                "Book return tickets from SFO to LHR, starting June 24 2025 and returning 30th June 2025"
+                "Find all authentication functions in the codebase",
+                "Search for API endpoint implementations",
+                "Find error handling patterns"
             ],
             "inputModes": null,
             "outputModes": null

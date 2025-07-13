@@ -21,7 +21,7 @@ class AgentQueryRequest(BaseModel):
     query: str
     context_id: str
     agent_type: str = (
-        "orchestrator"  # orchestrator, air_ticketing, hotel_booking, car_rental
+        "orchestrator"  # orchestrator, code_search, code_analysis, code_documentation
     )
 
 
@@ -154,19 +154,19 @@ async def query_agent_stream(
         raise HTTPException(status_code=500, detail=f"Failed to setup stream: {str(e)}")
 
 
-@router.post("/agents/travel/plan")
-async def plan_travel(
+@router.post("/agents/code-search")
+async def perform_code_search(
     request: AgentQueryRequest,
     current_user: User = Depends(get_current_user),
 ) -> AgentQueryResponse:
-    """Plan a travel itinerary using the orchestrator agent"""
+    """Perform comprehensive code search using the orchestrator agent"""
     try:
         # Generate a task ID for this query
         task_id = f"task_{current_user.id}_{request.context_id}"
 
-        # Execute the travel planning (collect all streaming responses)
+        # Execute the code search (collect all streaming responses)
         responses = []
-        async for chunk in agent_service.plan_travel(
+        async for chunk in agent_service.perform_code_search(
             request.query, request.context_id, task_id
         ):
             responses.append(chunk)
@@ -192,26 +192,28 @@ async def plan_travel(
         logger.error(f"Invalid request: {e}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"Error planning travel: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to plan travel: {str(e)}")
+        logger.error(f"Error performing code search: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to perform code search: {str(e)}"
+        )
 
 
-@router.get("/agents/travel/summary/{context_id}")
-async def get_travel_summary(
+@router.get("/agents/code-search/summary/{context_id}")
+async def get_code_search_summary(
     context_id: str,
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    """Get a summary of travel planning results for a specific context"""
+    """Get a summary of code search results for a specific context"""
     try:
-        return await agent_service.generate_travel_summary(context_id)
+        return await agent_service.generate_code_search_summary(context_id)
 
     except ValueError as e:
         logger.error(f"Invalid request: {e}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"Error getting travel summary: {e}")
+        logger.error(f"Error getting code search summary: {e}")
         raise HTTPException(
-            status_code=500, detail=f"Failed to get travel summary: {str(e)}"
+            status_code=500, detail=f"Failed to get code search summary: {str(e)}"
         )
 
 
@@ -228,4 +230,59 @@ async def clear_agent_context(
         logger.error(f"Error clearing context: {e}")
         raise HTTPException(
             status_code=500, detail=f"Failed to clear context: {str(e)}"
+        )
+
+
+# Specialized endpoints for each agent type
+@router.post("/agents/semantic-search")
+async def perform_semantic_search(
+    request: AgentQueryRequest,
+    current_user: User = Depends(get_current_user),
+) -> AgentQueryResponse:
+    """Perform semantic code search using the Code Search Agent"""
+    try:
+        # Override agent type to use code search agent
+        request.agent_type = "code_search"
+        return await query_agent(request, current_user)
+
+    except Exception as e:
+        logger.error(f"Error performing semantic search: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to perform semantic search: {str(e)}"
+        )
+
+
+@router.post("/agents/code-analysis")
+async def perform_code_analysis(
+    request: AgentQueryRequest,
+    current_user: User = Depends(get_current_user),
+) -> AgentQueryResponse:
+    """Perform code analysis using the Code Analysis Agent"""
+    try:
+        # Override agent type to use code analysis agent
+        request.agent_type = "code_analysis"
+        return await query_agent(request, current_user)
+
+    except Exception as e:
+        logger.error(f"Error performing code analysis: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to perform code analysis: {str(e)}"
+        )
+
+
+@router.post("/agents/documentation")
+async def generate_documentation(
+    request: AgentQueryRequest,
+    current_user: User = Depends(get_current_user),
+) -> AgentQueryResponse:
+    """Generate documentation using the Code Documentation Agent"""
+    try:
+        # Override agent type to use code documentation agent
+        request.agent_type = "code_documentation"
+        return await query_agent(request, current_user)
+
+    except Exception as e:
+        logger.error(f"Error generating documentation: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to generate documentation: {str(e)}"
         )

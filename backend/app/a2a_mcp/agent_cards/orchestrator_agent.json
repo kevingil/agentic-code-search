@@ -1,6 +1,6 @@
 {
     "name": "Orchestrator Agent",
-    "description": "Orchestrates the task generation and execution",
+    "description": "Orchestrates complex code search and analysis tasks",
     "url": "http://localhost:10101/",
     "provider": null,
     "version": "1.0.0",
@@ -26,14 +26,18 @@
     ],
     "skills": [
         {
-            "id": "executor",
-            "name": "Task Executor",
-            "description": "Orchestrates the task generation and execution, takes help from the planner to generate tasks",
+            "id": "code_search_orchestration",
+            "name": "Code Search Task Orchestration",
+            "description": "Coordinates complex code search and analysis workflows by delegating to specialized agents",
             "tags": [
-                "execute plan"
+                "orchestration",
+                "task coordination",
+                "code search workflow"
             ],
             "examples": [
-                "Plan my trip to London, submit an expense report"
+                "Analyze entire codebase for security vulnerabilities and documentation gaps",
+                "Perform comprehensive code review and generate improvement suggestions",
+                "Search for specific patterns across multiple files and provide analysis"
             ],
             "inputModes": null,
             "outputModes": null

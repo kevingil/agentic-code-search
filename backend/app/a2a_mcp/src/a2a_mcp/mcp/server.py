@@ -22,11 +22,8 @@ logger = get_logger(__name__)
 # Calculate the path to agent_cards directory relative to this file
 AGENT_CARDS_DIR = Path(__file__).parent.parent.parent.parent / "agent_cards"
 MODEL = "models/embedding-001"
-SQLLITE_DB = (
-    Path(__file__).parent.parent.parent.parent.parent.parent / "travel_agency.db"
-)
-PLACES_API_URL = "https://places.googleapis.com/v1/places:searchText"
-ALLOWED_EXTENSIONS = {".py", ".md", ".txt", ".c", ".cpp", ".js"}  # Customize this list
+SQLLITE_DB = Path(__file__).parent.parent.parent.parent.parent.parent / "code_search.db"
+ALLOWED_EXTENSIONS = {".py", ".js", ".ts", ".java", ".c", ".cpp", ".go", ".rb"}
 
 
 def init_api_key():
@@ -221,285 +218,397 @@ def serve(host, port, transport):  # noqa: PLR0915
             return json.dumps({"error": f"Failed to find agent: {str(e)}"})
 
     @mcp.tool()
-    def query_places_data(query: str):
-        """Query Google Places."""
-        logger.info(f"Search for places : {query}")
-
-        # Return dummy places data instead of calling Google Places API
-        dummy_places = {
-            "places": [
-                {
-                    "id": "place_1",
-                    "displayName": {"text": "Heathrow Airport", "languageCode": "en"},
-                    "formattedAddress": "London TW6, UK",
-                },
-                {
-                    "id": "place_2",
-                    "displayName": {"text": "Tower of London", "languageCode": "en"},
-                    "formattedAddress": "London EC3N 4AB, UK",
-                },
-                {
-                    "id": "place_3",
-                    "displayName": {"text": "London Bridge", "languageCode": "en"},
-                    "formattedAddress": "London Bridge, London, UK",
-                },
-                {
-                    "id": "place_4",
-                    "displayName": {"text": "Big Ben", "languageCode": "en"},
-                    "formattedAddress": "Westminster, London SW1A 0AA, UK",
-                },
-                {
-                    "id": "place_5",
-                    "displayName": {"text": "British Museum", "languageCode": "en"},
-                    "formattedAddress": "Great Russell St, Bloomsbury, London WC1B 3DG, UK",
-                },
-            ]
-        }
-
-        # Filter places based on query if needed
-        query_lower = query.lower()
-        if "airport" in query_lower:
-            return {"places": [dummy_places["places"][0]]}  # Return Heathrow
-        elif "museum" in query_lower:
-            return {"places": [dummy_places["places"][4]]}  # Return British Museum
-        elif "bridge" in query_lower:
-            return {"places": [dummy_places["places"][2]]}  # Return London Bridge
-
-        # Return all places by default
-        return dummy_places
-
-    @mcp.tool()
-    def search_flights(
-        departure_airport: str, arrival_airport: str, start_date: str, end_date: str
+    def semantic_code_search(
+        query: str, file_pattern: str = "*", language: str = "python"
     ):
-        """Search for flights with specific parameters."""
+        """Perform semantic code search across the codebase."""
         logger.info(
-            f"Search flights: {departure_airport} to {arrival_airport}, {start_date} to {end_date}"
+            f"Semantic code search: {query} in {file_pattern} files (language: {language})"
         )
 
-        # Return dummy flight search results
-        dummy_flight_results = [
+        # Return dummy semantic search results
+        dummy_search_results = [
             {
-                "id": 1,
-                "carrier": "British Airways",
-                "flight_number": "BA287",
-                "departure_airport": departure_airport,
-                "arrival_airport": arrival_airport,
-                "departure_date": start_date,
-                "departure_time": "10:30",
-                "arrival_time": "22:45",
-                "ticket_class": "ECONOMY",
-                "price": 850.00,
-                "duration": "11h 15m",
+                "file_path": "backend/app/api/routes/agents.py",
+                "line_number": 25,
+                "code_snippet": "async def query_agent(request: AgentQueryRequest, current_user: User = Depends(get_current_user)):",
+                "match_type": "semantic",
+                "confidence_score": 0.95,
+                "context": "FastAPI endpoint for querying agents with authentication",
+                "function_name": "query_agent",
+                "class_name": None,
+                "docstring": "Query an agent with a specific request",
             },
             {
-                "id": 2,
-                "carrier": "Virgin Atlantic",
-                "flight_number": "VS19",
-                "departure_airport": departure_airport,
-                "arrival_airport": arrival_airport,
-                "departure_date": start_date,
-                "departure_time": "14:20",
-                "arrival_time": "02:35+1",
-                "ticket_class": "BUSINESS",
-                "price": 2400.00,
-                "duration": "11h 15m",
+                "file_path": "backend/app/services/agent_service.py",
+                "line_number": 67,
+                "code_snippet": "async def query_agent(self, agent_type: str, query: str, context_id: str, task_id: str):",
+                "match_type": "semantic",
+                "confidence_score": 0.92,
+                "context": "Service layer method for agent queries with streaming support",
+                "function_name": "query_agent",
+                "class_name": "AgentService",
+                "docstring": "Query an agent and return streaming responses",
+            },
+            {
+                "file_path": "backend/app/a2a_mcp/src/a2a_mcp/agents/orchestrator_agent.py",
+                "line_number": 156,
+                "code_snippet": "async def stream(self, query, context_id, task_id) -> AsyncIterable[dict[str, any]]:",
+                "match_type": "semantic",
+                "confidence_score": 0.88,
+                "context": "Orchestrator agent streaming method for handling complex queries",
+                "function_name": "stream",
+                "class_name": "OrchestratorAgent",
+                "docstring": "Execute and stream response",
             },
         ]
 
-        return {"flights": dummy_flight_results}
+        # Filter results based on query content
+        if "authentication" in query.lower() or "auth" in query.lower():
+            auth_results = [
+                {
+                    "file_path": "backend/app/core/security.py",
+                    "line_number": 45,
+                    "code_snippet": "def create_access_token(subject: str, expires_delta: timedelta = None):",
+                    "match_type": "semantic",
+                    "confidence_score": 0.94,
+                    "context": "JWT token creation for authentication",
+                    "function_name": "create_access_token",
+                    "class_name": None,
+                    "docstring": "Create access token for authentication",
+                },
+                {
+                    "file_path": "backend/app/api/deps.py",
+                    "line_number": 23,
+                    "code_snippet": "def get_current_user(session: Session = Depends(get_session), token: str = Depends(oauth2_scheme)):",
+                    "match_type": "semantic",
+                    "confidence_score": 0.91,
+                    "context": "Dependency for getting current authenticated user",
+                    "function_name": "get_current_user",
+                    "class_name": None,
+                    "docstring": "Get current authenticated user from token",
+                },
+            ]
+            return {"search_results": auth_results}
+
+        return {"search_results": dummy_search_results}
 
     @mcp.tool()
-    def search_hotels(location: str, check_in_date: str, check_out_date: str):
-        """Search for hotels with specific parameters."""
-        logger.info(f"Search hotels: {location}, {check_in_date} to {check_out_date}")
+    def analyze_code_quality(file_path: str, analysis_type: str = "comprehensive"):
+        """Analyze code quality for a specific file or pattern."""
+        logger.info(f"Code quality analysis: {file_path} (type: {analysis_type})")
 
-        # Return dummy hotel search results
-        dummy_hotel_results = [
-            {
-                "id": 1,
-                "name": "The Langham London",
-                "location": location,
-                "check_in_date": check_in_date,
-                "check_out_date": check_out_date,
-                "room_type": "SUITE",
-                "hotel_type": "LUXURY",
-                "price_per_night": 450.00,
-                "total_price": 1350.00,  # 3 nights
-                "amenities": ["WiFi", "Spa", "Fitness Center", "Restaurant"],
-                "rating": 4.8,
+        # Return dummy code analysis results
+        dummy_analysis_results = {
+            "file_path": file_path,
+            "analysis_type": analysis_type,
+            "issues": [
+                {
+                    "line_number": 45,
+                    "severity": "medium",
+                    "description": "Function has too many parameters (6/5)",
+                    "suggestion": "Consider using a configuration object or breaking the function into smaller parts",
+                    "rule": "complexity/max-params",
+                },
+                {
+                    "line_number": 78,
+                    "severity": "low",
+                    "description": "Missing type annotation for return value",
+                    "suggestion": "Add return type annotation: -> Dict[str, Any]",
+                    "rule": "type-hints/missing-return-type",
+                },
+                {
+                    "line_number": 112,
+                    "severity": "high",
+                    "description": "Potential SQL injection vulnerability",
+                    "suggestion": "Use parameterized queries or ORM methods",
+                    "rule": "security/sql-injection",
+                },
+            ],
+            "metrics": {
+                "complexity": 7.2,
+                "maintainability": 8.5,
+                "test_coverage": 85.0,
+                "lines_of_code": 156,
+                "cyclomatic_complexity": 12,
+                "technical_debt_ratio": 0.08,
             },
-            {
-                "id": 2,
-                "name": "Premier Inn London",
-                "location": location,
-                "check_in_date": check_in_date,
-                "check_out_date": check_out_date,
-                "room_type": "STANDARD",
-                "hotel_type": "BUDGET",
-                "price_per_night": 120.00,
-                "total_price": 360.00,  # 3 nights
-                "amenities": ["WiFi", "Restaurant"],
-                "rating": 4.2,
-            },
-        ]
-
-        return {"hotels": dummy_hotel_results}
-
-    @mcp.tool()
-    def query_travel_data(query: str) -> dict:
-        """ "name": "query_travel_data",
-        "description": "Retrieves the most up-to-date, ariline, hotel and car rental availability. Helps with the booking.
-        This tool should be used when a user asks for the airline ticket booking, hotel or accommodation booking, or car rental reservations.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-            "query": {
-                "type": "string",
-                "description": "A SQL to run against the travel database."
-            }
-            },
-            "required": ["query"]
+            "suggestions": [
+                "Consider breaking down large functions into smaller, more focused functions",
+                "Add comprehensive docstrings to all public methods",
+                "Implement error handling for edge cases",
+                "Add unit tests for uncovered code paths",
+            ],
         }
+
+        # Customize results based on analysis type
+        if analysis_type == "security":
+            dummy_analysis_results["issues"] = [
+                issue
+                for issue in dummy_analysis_results["issues"]
+                if issue["severity"] == "high" or "security" in issue["rule"]
+            ]
+        elif analysis_type == "performance":
+            dummy_analysis_results["issues"] = [
+                {
+                    "line_number": 34,
+                    "severity": "medium",
+                    "description": "Inefficient database query in loop",
+                    "suggestion": "Use bulk operations or optimize with joins",
+                    "rule": "performance/n-plus-one-query",
+                }
+            ]
+
+        return dummy_analysis_results
+
+    @mcp.tool()
+    def generate_documentation(
+        file_path: str, doc_type: str = "docstrings", style: str = "google"
+    ):
+        """Generate documentation for code files."""
+        logger.info(
+            f"Generate documentation: {file_path} (type: {doc_type}, style: {style})"
+        )
+
+        # Return dummy documentation results
+        dummy_doc_results = {
+            "file_path": file_path,
+            "documentation_type": doc_type,
+            "style": style,
+            "generated_docs": {
+                "module_docstring": f'"""{file_path.split("/")[-1].replace(".py", "")} module.\n\nThis module provides functionality for code search and analysis.\n\nTypical usage example:\n\n    from {file_path.split("/")[-1].replace(".py", "")} import main_function\n    result = main_function()\n"""',
+                "function_docstrings": [
+                    {
+                        "function_name": "query_agent",
+                        "docstring": '"""Query an agent with a specific request.\n\nArgs:\n    request: AgentQueryRequest containing query and context information\n    current_user: User object for authentication\n\nReturns:\n    AgentQueryResponse: Response containing agent results\n\nRaises:\n    HTTPException: If query validation fails or agent is unavailable\n"""',
+                    },
+                    {
+                        "function_name": "get_agents_status",
+                        "docstring": '"""Get status of all available agents.\n\nReturns:\n    List[AgentStatusResponse]: List of agent status information\n\nRaises:\n    HTTPException: If unable to retrieve agent status\n"""',
+                    },
+                ],
+                "class_docstrings": [
+                    {
+                        "class_name": "AgentQueryRequest",
+                        "docstring": '"""Request model for agent queries.\n\nAttributes:\n    query: The search query string\n    context_id: Unique identifier for the session context\n    agent_type: Type of agent to query (orchestrator, code_search, etc.)\n"""',
+                    }
+                ],
+            },
+            "existing_docs": {
+                "coverage_score": 65.0,
+                "missing_docstrings": ["helper_function", "internal_method"],
+                "outdated_docstrings": ["legacy_function"],
+            },
+            "suggestions": [
+                "Add comprehensive module-level docstring",
+                "Include type hints in all function signatures",
+                "Add examples in docstrings for complex functions",
+                "Document exception handling patterns",
+            ],
+        }
+
+        # Customize based on documentation type
+        if doc_type == "api_docs":
+            dummy_doc_results["generated_docs"]["api_spec"] = {
+                "openapi_version": "3.0.0",
+                "info": {"title": "Code Search API", "version": "1.0.0"},
+                "paths": {
+                    "/agents/query": {
+                        "post": {
+                            "summary": "Query an agent",
+                            "parameters": ["request", "current_user"],
+                            "responses": {
+                                "200": {"description": "Successful response"}
+                            },
+                        }
+                    }
+                },
+            }
+
+        return dummy_doc_results
+
+    @mcp.tool()
+    def search_code_patterns(
+        pattern: str, file_extensions: list = None, exclude_dirs: list = None
+    ):
+        """Search for specific code patterns using regex or AST analysis."""
+        logger.info(f"Search code patterns: {pattern}")
+
+        if file_extensions is None:
+            file_extensions = [".py", ".js", ".ts", ".java"]
+        if exclude_dirs is None:
+            exclude_dirs = ["node_modules", "__pycache__", ".git"]
+
+        # Return dummy pattern search results
+        dummy_pattern_results = {
+            "pattern": pattern,
+            "file_extensions": file_extensions,
+            "exclude_dirs": exclude_dirs,
+            "matches": [
+                {
+                    "file_path": "backend/app/api/routes/agents.py",
+                    "line_number": 15,
+                    "match": "from fastapi import APIRouter, HTTPException, Depends",
+                    "context": "Import statement for FastAPI dependencies",
+                    "pattern_type": "import",
+                },
+                {
+                    "file_path": "backend/app/services/agent_service.py",
+                    "line_number": 8,
+                    "match": "from typing import Any, Dict, List, Optional, AsyncIterator",
+                    "context": "Type hint imports",
+                    "pattern_type": "import",
+                },
+                {
+                    "file_path": "backend/app/core/security.py",
+                    "line_number": 12,
+                    "match": "from datetime import datetime, timedelta",
+                    "context": "DateTime utilities import",
+                    "pattern_type": "import",
+                },
+            ],
+            "summary": {
+                "total_matches": 3,
+                "files_searched": 45,
+                "pattern_type": "regex",
+                "search_time_ms": 234,
+            },
+        }
+
+        # Customize based on pattern type
+        if "async def" in pattern:
+            dummy_pattern_results["matches"] = [
+                {
+                    "file_path": "backend/app/api/routes/agents.py",
+                    "line_number": 25,
+                    "match": "async def query_agent(request: AgentQueryRequest, current_user: User = Depends(get_current_user)):",
+                    "context": "Async FastAPI endpoint",
+                    "pattern_type": "function_definition",
+                },
+                {
+                    "file_path": "backend/app/services/agent_service.py",
+                    "line_number": 67,
+                    "match": "async def query_agent(self, agent_type: str, query: str, context_id: str, task_id: str):",
+                    "context": "Async service method",
+                    "pattern_type": "function_definition",
+                },
+            ]
+
+        return dummy_pattern_results
+
+    @mcp.tool()
+    def query_code_database(query: str) -> dict:
+        """Query the code analysis database with SQL-like syntax.
+
+        This tool provides access to indexed code information including:
+        - Functions and their signatures
+        - Classes and their methods
+        - Import dependencies
+        - Code metrics and analysis results
+
+        Args:
+            query: SQL-like query string to execute against the code database
+
+        Returns:
+            Dictionary containing query results
         """
-        # Return dummy data instead of querying real database
-        logger.info(f"Query received: {query}")
+        logger.info(f"Query code database: {query}")
 
         # Parse the query to determine what type of data to return
         query_lower = query.lower()
 
-        if "flights" in query_lower:
-            # Return dummy flight data
-            dummy_flights = [
+        if "functions" in query_lower:
+            # Return dummy function data
+            dummy_functions = [
                 {
                     "id": 1,
-                    "carrier": "British Airways",
-                    "flight_number": 287,
-                    "from_airport": "SFO",
-                    "to_airport": "LHR",
-                    "ticket_class": "BUSINESS",
-                    "price": 2500.00,
+                    "name": "query_agent",
+                    "file_path": "backend/app/api/routes/agents.py",
+                    "line_number": 25,
+                    "signature": "async def query_agent(request: AgentQueryRequest, current_user: User = Depends(get_current_user))",
+                    "return_type": "AgentQueryResponse",
+                    "complexity": 5,
+                    "is_async": True,
+                    "is_public": True,
                 },
                 {
                     "id": 2,
-                    "carrier": "Virgin Atlantic",
-                    "flight_number": 19,
-                    "from_airport": "SFO",
-                    "to_airport": "LHR",
-                    "ticket_class": "ECONOMY",
-                    "price": 800.00,
-                },
-                {
-                    "id": 3,
-                    "carrier": "British Airways",
-                    "flight_number": 286,
-                    "from_airport": "LHR",
-                    "to_airport": "SFO",
-                    "ticket_class": "BUSINESS",
-                    "price": 2500.00,
-                },
-                {
-                    "id": 4,
-                    "carrier": "Virgin Atlantic",
-                    "flight_number": 20,
-                    "from_airport": "LHR",
-                    "to_airport": "SFO",
-                    "ticket_class": "ECONOMY",
-                    "price": 800.00,
-                },
-            ]
-
-            # Filter based on query parameters if possible
-            if "business" in query_lower:
-                result_flights = [
-                    f for f in dummy_flights if f["ticket_class"] == "BUSINESS"
-                ]
-            elif "economy" in query_lower:
-                result_flights = [
-                    f for f in dummy_flights if f["ticket_class"] == "ECONOMY"
-                ]
-            else:
-                result_flights = dummy_flights[:2]  # Return first 2 by default
-
-            return json.dumps({"results": result_flights})
-
-        elif "hotels" in query_lower:
-            # Return dummy hotel data
-            dummy_hotels = [
-                {
-                    "id": 1,
-                    "name": "The Langham London",
-                    "city": "London",
-                    "hotel_type": "HOTEL",
-                    "room_type": "SUITE",
-                    "price_per_night": 450.00,
-                },
-                {
-                    "id": 2,
-                    "name": "Premier Inn London",
-                    "city": "London",
-                    "hotel_type": "HOTEL",
-                    "room_type": "STANDARD",
-                    "price_per_night": 120.00,
-                },
-                {
-                    "id": 3,
-                    "name": "Cozy London Flat",
-                    "city": "London",
-                    "hotel_type": "AIRBNB",
-                    "room_type": "DOUBLE",
-                    "price_per_night": 85.00,
+                    "name": "get_agents_status",
+                    "file_path": "backend/app/api/routes/agents.py",
+                    "line_number": 45,
+                    "signature": "async def get_agents_status(current_user: User = Depends(get_current_user))",
+                    "return_type": "List[AgentStatusResponse]",
+                    "complexity": 3,
+                    "is_async": True,
+                    "is_public": True,
                 },
             ]
 
             # Filter based on query parameters
-            if "suite" in query_lower:
-                result_hotels = [h for h in dummy_hotels if h["room_type"] == "SUITE"]
-            elif "airbnb" in query_lower:
-                result_hotels = [h for h in dummy_hotels if h["hotel_type"] == "AIRBNB"]
+            if "async" in query_lower:
+                result_functions = [f for f in dummy_functions if f["is_async"]]
+            elif "public" in query_lower:
+                result_functions = [f for f in dummy_functions if f["is_public"]]
             else:
-                result_hotels = dummy_hotels[:2]  # Return first 2 by default
+                result_functions = dummy_functions
 
-            return json.dumps({"results": result_hotels})
+            return {"results": result_functions}
 
-        elif "rental_cars" in query_lower or "cars" in query_lower:
-            # Return dummy car rental data
-            dummy_cars = [
+        elif "classes" in query_lower:
+            # Return dummy class data
+            dummy_classes = [
                 {
                     "id": 1,
-                    "provider": "Hertz",
-                    "city": "London",
-                    "type_of_car": "SEDAN",
-                    "daily_rate": 65.00,
+                    "name": "AgentService",
+                    "file_path": "backend/app/services/agent_service.py",
+                    "line_number": 15,
+                    "methods": [
+                        "query_agent",
+                        "get_agent_status",
+                        "clear_agent_context",
+                    ],
+                    "is_abstract": False,
+                    "inheritance": ["object"],
                 },
                 {
                     "id": 2,
-                    "provider": "Enterprise",
-                    "city": "London",
-                    "type_of_car": "SUV",
-                    "daily_rate": 85.00,
-                },
-                {
-                    "id": 3,
-                    "provider": "Budget",
-                    "city": "London",
-                    "type_of_car": "TRUCK",
-                    "daily_rate": 95.00,
+                    "name": "OrchestratorAgent",
+                    "file_path": "backend/app/a2a_mcp/src/a2a_mcp/agents/orchestrator_agent.py",
+                    "line_number": 25,
+                    "methods": ["stream", "generate_summary", "clear_state"],
+                    "is_abstract": False,
+                    "inheritance": ["BaseAgent"],
                 },
             ]
 
-            # Filter based on query parameters
-            if "suv" in query_lower:
-                result_cars = [c for c in dummy_cars if c["type_of_car"] == "SUV"]
-            elif "sedan" in query_lower:
-                result_cars = [c for c in dummy_cars if c["type_of_car"] == "SEDAN"]
-            else:
-                result_cars = dummy_cars[:2]  # Return first 2 by default
+            return {"results": dummy_classes}
 
-            return json.dumps({"results": result_cars})
+        elif "imports" in query_lower:
+            # Return dummy import data
+            dummy_imports = [
+                {
+                    "id": 1,
+                    "module": "fastapi",
+                    "imported_items": ["APIRouter", "HTTPException", "Depends"],
+                    "file_path": "backend/app/api/routes/agents.py",
+                    "line_number": 1,
+                    "is_standard_library": False,
+                },
+                {
+                    "id": 2,
+                    "module": "typing",
+                    "imported_items": ["Any", "Dict", "List", "Optional"],
+                    "file_path": "backend/app/services/agent_service.py",
+                    "line_number": 5,
+                    "is_standard_library": True,
+                },
+            ]
+
+            return {"results": dummy_imports}
 
         # Default empty result
         return json.dumps({"results": []})
+        return {"results": []}
 
     @mcp.tool()
     def get_embeddings(text: str) -> dict:

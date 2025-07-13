@@ -113,64 +113,128 @@ async def find_resource(session: ClientSession, resource) -> ReadResourceResult:
     return await session.read_resource(resource)
 
 
-async def search_flights(session: ClientSession) -> CallToolResult:
-    """Calls the 'search_flights' tool on the connected MCP server.
+async def semantic_code_search(
+    session: ClientSession,
+    query: str,
+    file_pattern: str = "*",
+    language: str = "python",
+) -> CallToolResult:
+    """Calls the 'semantic_code_search' tool on the connected MCP server.
 
     Args:
         session: The active ClientSession.
-        query: The natural language query to send to the 'search_flights' tool.
+        query: The search query for semantic code search.
+        file_pattern: File pattern to search (default: "*").
+        language: Programming language to focus on (default: "python").
 
     Returns:
         The result of the tool call.
     """
-    logger.info("Calling 'search_flights' tool'")
+    logger.info(f"Calling 'semantic_code_search' tool with query: '{query}'")
     return await session.call_tool(
-        name="search_flights",
+        name="semantic_code_search",
         arguments={
-            "departure_airport": "SFO",
-            "arrival_airport": "LHR",
-            "start_date": "2025-06-03",
-            "end_date": "2025-06-09",
+            "query": query,
+            "file_pattern": file_pattern,
+            "language": language,
         },
     )
 
 
-async def search_hotels(session: ClientSession) -> CallToolResult:
-    """Calls the 'search_hotels' tool on the connected MCP server.
+async def analyze_code_quality(
+    session: ClientSession, file_path: str, analysis_type: str = "comprehensive"
+) -> CallToolResult:
+    """Calls the 'analyze_code_quality' tool on the connected MCP server.
 
     Args:
         session: The active ClientSession.
-        query: The natural language query to send to the 'search_hotels' tool.
+        file_path: The file path to analyze.
+        analysis_type: Type of analysis to perform (default: "comprehensive").
 
     Returns:
         The result of the tool call.
     """
-    logger.info("Calling 'search_hotels' tool'")
+    logger.info(f"Calling 'analyze_code_quality' tool for file: '{file_path}'")
     return await session.call_tool(
-        name="search_hotels",
+        name="analyze_code_quality",
         arguments={
-            "location": "A Suite room in St Pancras Square in London",
-            "check_in_date": "2025-06-03",
-            "check_out_date": "2025-06-09",
+            "file_path": file_path,
+            "analysis_type": analysis_type,
         },
     )
 
 
-async def query_db(session: ClientSession) -> CallToolResult:
-    """Calls the 'query' tool on the connected MCP server.
+async def generate_documentation(
+    session: ClientSession,
+    file_path: str,
+    doc_type: str = "docstrings",
+    style: str = "google",
+) -> CallToolResult:
+    """Calls the 'generate_documentation' tool on the connected MCP server.
 
     Args:
         session: The active ClientSession.
-        query: The natural language query to send to the 'search_hotels' tool.
+        file_path: The file path to generate documentation for.
+        doc_type: Type of documentation to generate (default: "docstrings").
+        style: Documentation style to use (default: "google").
 
     Returns:
         The result of the tool call.
     """
-    logger.info("Calling 'search_hotels' tool'")
+    logger.info(f"Calling 'generate_documentation' tool for file: '{file_path}'")
     return await session.call_tool(
-        name="query_db",
+        name="generate_documentation",
         arguments={
-            "query": "SELECT id, name, city, hotel_type, room_type, price_per_night FROM hotels WHERE city='London'",
+            "file_path": file_path,
+            "doc_type": doc_type,
+            "style": style,
+        },
+    )
+
+
+async def search_code_patterns(
+    session: ClientSession,
+    pattern: str,
+    file_extensions: list = None,
+    exclude_dirs: list = None,
+) -> CallToolResult:
+    """Calls the 'search_code_patterns' tool on the connected MCP server.
+
+    Args:
+        session: The active ClientSession.
+        pattern: The code pattern to search for.
+        file_extensions: List of file extensions to include (default: None).
+        exclude_dirs: List of directories to exclude (default: None).
+
+    Returns:
+        The result of the tool call.
+    """
+    logger.info(f"Calling 'search_code_patterns' tool with pattern: '{pattern}'")
+    return await session.call_tool(
+        name="search_code_patterns",
+        arguments={
+            "pattern": pattern,
+            "file_extensions": file_extensions,
+            "exclude_dirs": exclude_dirs,
+        },
+    )
+
+
+async def query_code_database(session: ClientSession, query: str) -> CallToolResult:
+    """Calls the 'query_code_database' tool on the connected MCP server.
+
+    Args:
+        session: The active ClientSession.
+        query: The SQL-like query to execute against the code database.
+
+    Returns:
+        The result of the tool call.
+    """
+    logger.info(f"Calling 'query_code_database' tool with query: '{query}'")
+    return await session.call_tool(
+        name="query_code_database",
+        arguments={
+            "query": query,
         },
     )
 
@@ -187,6 +251,7 @@ async def main(host, port, transport, query, resource, tool):
         transport: Connection transport ('sse' or 'stdio').
         query: Optional query string for the 'find_agent' tool.
         resource: Optional resource URI to read.
+        tool: Optional tool name to test.
     """
     logger.info("Starting Client to connect to MCP")
     async with init_session(host, port, transport) as session:
@@ -200,16 +265,34 @@ async def main(host, port, transport, query, resource, tool):
             data = json.loads(result.contents[0].text)
             logger.info(json.dumps(data, indent=2))
         if tool:
-            if tool == "search_flights":
-                results = await search_flights(session)
-                logger.info(results.model_dump())
-            if tool == "search_hotels":
-                result = await search_hotels(session)
+            if tool == "semantic_code_search":
+                result = await semantic_code_search(
+                    session, "find authentication functions", "*", "python"
+                )
                 data = json.loads(result.content[0].text)
                 logger.info(json.dumps(data, indent=2))
-            if tool == "query_db":
-                result = await query_db(session)
-                logger.info(result)
+            elif tool == "analyze_code_quality":
+                result = await analyze_code_quality(
+                    session, "backend/app/api/routes/agents.py", "comprehensive"
+                )
+                data = json.loads(result.content[0].text)
+                logger.info(json.dumps(data, indent=2))
+            elif tool == "generate_documentation":
+                result = await generate_documentation(
+                    session, "backend/app/api/routes/agents.py", "docstrings", "google"
+                )
+                data = json.loads(result.content[0].text)
+                logger.info(json.dumps(data, indent=2))
+            elif tool == "search_code_patterns":
+                result = await search_code_patterns(
+                    session, "async def", [".py"], ["__pycache__"]
+                )
+                data = json.loads(result.content[0].text)
+                logger.info(json.dumps(data, indent=2))
+            elif tool == "query_code_database":
+                result = await query_code_database(
+                    session, "SELECT * FROM functions WHERE is_async = true"
+                )
                 data = json.loads(result.content[0].text)
                 logger.info(json.dumps(data, indent=2))
 
@@ -221,9 +304,13 @@ async def main(host, port, transport, query, resource, tool):
 @click.option("--transport", default="stdio", help="MCP Transport")
 @click.option("--find_agent", help="Query to find an agent")
 @click.option("--resource", help="URI of the resource to locate")
-def cli(host, port, transport, find_agent, resource, tool_name):
+@click.option(
+    "--tool",
+    help="Name of the tool to test (semantic_code_search, analyze_code_quality, generate_documentation, search_code_patterns, query_code_database)",
+)
+def cli(host, port, transport, find_agent, resource, tool):
     """A command-line client to interact with the Agent Cards MCP server."""
-    asyncio.run(main(host, port, transport, find_agent, resource, tool_name))
+    asyncio.run(main(host, port, transport, find_agent, resource, tool))
 
 
 if __name__ == "__main__":
