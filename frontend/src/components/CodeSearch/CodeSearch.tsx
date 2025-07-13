@@ -292,13 +292,14 @@ function CodeSearch() {
       // Stream the agent response
       let fullContent = ""
       let lastMetadata: any = {}
+      let collectedErrors: string[] = []
 
       for await (const chunk of agentService.streamAgentQuery(request)) {
         if (chunk.error) {
-          // Parse error object properly
+          // Parse error object properly and collect it, but continue processing
           const error = chunk.error as any
           const errorMsg = error?.error?.message || error?.message || JSON.stringify(error)
-          throw new Error(errorMsg)
+          collectedErrors.push(errorMsg)
         }
 
         if (chunk.content) {
@@ -309,6 +310,7 @@ function CodeSearch() {
           response_type: chunk.response_type,
           is_task_complete: chunk.is_task_complete,
           require_user_input: chunk.require_user_input,
+          errors: collectedErrors.length > 0 ? collectedErrors : undefined,
         }
 
         // Update the agent message with streaming content
@@ -341,6 +343,7 @@ function CodeSearch() {
           ...lastMetadata,
           artifacts: extractArtifacts(fullContent),
           parsed_content: parsedContent,
+          errors: collectedErrors.length > 0 ? collectedErrors : undefined,
         },
       }
 
@@ -607,6 +610,24 @@ function CodeSearch() {
   const formatMessageContent = (message: Message) => {
     const content = message.content
     
+    // Check if there are any errors in metadata
+    const errors = message.metadata?.errors
+    const hasErrors = errors && errors.length > 0
+    
+    // Create error display component if there are errors
+    const ErrorDisplay = hasErrors ? (
+      <Box bg="orange.50" border="1px" borderColor="orange.200" p={3} rounded="md" mb={3}>
+        <Text fontSize="sm" color="orange.700" fontWeight="medium" mb={2}>
+          ⚠️ Warning: Stream contained errors
+        </Text>
+        {errors.map((error: string, index: number) => (
+          <Text key={index} fontSize="sm" color="orange.600" mb={1}>
+            • {error}
+          </Text>
+        ))}
+      </Box>
+    ) : null
+    
     // Check if content contains input_required JSON and extract just the question text
     const jsonPattern = /\{[\s\S]*?\}/g
     const jsonMatches = [...content.matchAll(jsonPattern)]
@@ -651,7 +672,12 @@ function CodeSearch() {
       
       // If text content just says the question, don't duplicate it
       if (textContent.includes(questionText)) {
-        return <Text whiteSpace="pre-wrap">{textContent}</Text>
+        return (
+          <VStack align="stretch" gap={2}>
+            {ErrorDisplay}
+            <Text whiteSpace="pre-wrap">{textContent}</Text>
+          </VStack>
+        )
       }
       
       // Combine text content with question, removing any redundant parts
@@ -660,7 +686,10 @@ function CodeSearch() {
         : questionText || textContent
       
       return (
-        <Text whiteSpace="pre-wrap">{finalText}</Text>
+        <VStack align="stretch" gap={2}>
+          {ErrorDisplay}
+          <Text whiteSpace="pre-wrap">{finalText}</Text>
+        </VStack>
       )
     }
     
@@ -669,7 +698,10 @@ function CodeSearch() {
       const parsed = JSON.parse(content.trim())
       if (parsed && typeof parsed === 'object' && parsed.status === 'input_required' && parsed.question) {
         return (
-          <Text whiteSpace="pre-wrap">{parsed.question}</Text>
+          <VStack align="stretch" gap={2}>
+            {ErrorDisplay}
+            <Text whiteSpace="pre-wrap">{parsed.question}</Text>
+          </VStack>
         )
       }
     } catch (e) {
@@ -682,13 +714,17 @@ function CodeSearch() {
       
       if (type === 'input_required') {
         return (
-          <Text whiteSpace="pre-wrap">{data.question}</Text>
+          <VStack align="stretch" gap={2}>
+            {ErrorDisplay}
+            <Text whiteSpace="pre-wrap">{data.question}</Text>
+          </VStack>
         )
       }
       
       if (type === 'artifact') {
         return (
           <VStack align="stretch" gap={2}>
+            {ErrorDisplay}
             <Text>The agent provided structured data:</Text>
             {renderArtifact({ id: 'parsed_artifact', type: 'json', content: data })}
           </VStack>
@@ -707,6 +743,7 @@ function CodeSearch() {
       
       return (
         <VStack align="stretch" gap={3}>
+          {ErrorDisplay}
           {textContent && (
             <Text whiteSpace="pre-wrap">{textContent}</Text>
           )}
@@ -717,7 +754,7 @@ function CodeSearch() {
     
     // Fallback to original formatting
     const parts = content.split(/(```[\s\S]*?```)/g)
-    return parts.map((part, index) => {
+    const formattedParts = parts.map((part, index) => {
       if (part.startsWith("```")) {
         return renderArtifact({ id: `inline_code_${index}`, type: 'code', content: part })
       }
@@ -727,6 +764,13 @@ function CodeSearch() {
         </Text>
       )
     })
+    
+    return (
+      <VStack align="stretch" gap={2}>
+        {ErrorDisplay}
+        {formattedParts}
+      </VStack>
+    )
   }
 
   const handleSessionSelect = async (sessionId: string) => {
