@@ -3,8 +3,6 @@ import json
 import os
 import sqlite3
 import traceback
-import zipfile
-import io
 import uuid
 import asyncio
 from contextlib import asynccontextmanager
@@ -15,7 +13,6 @@ import google.generativeai as genai
 import numpy as np
 import pandas as pd
 import requests
-import tempfile
 from ..mcp_config import mcp_settings
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.utilities.logging import get_logger
@@ -632,44 +629,6 @@ def serve(host, port, transport):  # noqa: PLR0915
             content=text,
             task_type="retrieval_document",
         )["embedding"]
-
-    @mcp.tool()
-    def download_repo_as_zip(github_url: str) -> zipfile.ZipFile:
-        """Download GitHub repo as a ZIP archive"""
-
-        owner_repo = github_url.rstrip("/").split("github.com/")[-1]
-        zip_url = f"https://github.com/{owner_repo}/archive/refs/heads/master.zip"
-        response = requests.get(zip_url)
-        if response.status_code != 200:
-            # fallback to main branch
-            zip_url = f"https://github.com/{owner_repo}/archive/refs/heads/main.zip"
-            response = requests.get(zip_url)
-            if response.status_code != 200:
-                raise Exception("Could not download repository ZIP.")
-        return zipfile.ZipFile(io.BytesIO(response.content))
-
-    @mcp.tool()
-    def extract_text_files(zip_file: zipfile.ZipFile) -> dict:
-        """Extract text/code files from the ZIP and return as {filename: content}"""
-        file_contents = {}
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            zip_file.extractall(tmpdirname)
-            for root, _, files in os.walk(tmpdirname):
-                for file in files:
-                    ext = os.path.splitext(file)[1]
-                    if ext in ALLOWED_EXTENSIONS:
-                        file_path = os.path.join(root, file)
-                        try:
-                            with open(file_path, encoding="utf-8") as f:
-                                content = f.read()
-                                if content.strip():  # Skip empty files
-                                    relative_path = os.path.relpath(
-                                        file_path, tmpdirname
-                                    )
-                                    file_contents[relative_path] = content
-                        except Exception:
-                            pass  # Skip unreadable files
-        return file_contents
 
     @mcp.tool(
         name="vector_search_code",
