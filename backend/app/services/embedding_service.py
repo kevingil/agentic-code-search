@@ -1,3 +1,8 @@
+"""
+Embedding Service
+Handles generation of embeddings for code search using Google Generative AI
+"""
+
 import os
 import tempfile
 import shutil
@@ -11,6 +16,7 @@ import subprocess
 import mimetypes
 from sqlmodel import Session, select
 import google.generativeai as genai
+import weave
 
 from app.core.db import engine
 from app.models import CodeSearchSession, CodeSearchEmbedding
@@ -374,6 +380,7 @@ class EmbeddingService:
         
         return chunks
     
+    @weave.op()
     async def _generate_embedding(self, content: str) -> List[float]:
         """Generate embedding vector for content using Google Generative AI"""
         if not self.genai_available:

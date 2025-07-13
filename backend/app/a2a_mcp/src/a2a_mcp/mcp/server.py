@@ -17,6 +17,7 @@ from ..mcp_config import mcp_settings
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.utilities.logging import get_logger
 from .db_connection import VectorSearchService
+import weave
 
 logger = get_logger(__name__)
 # Calculate the path to agent_cards directory relative to this file
@@ -37,6 +38,7 @@ def init_api_key():
     genai.configure(api_key=mcp_settings.GOOGLE_API_KEY)
 
 
+@weave.op()
 def generate_embeddings(text):
     """Generates embeddings for the given text using Google Generative AI.
 
@@ -622,6 +624,7 @@ def serve(host, port, transport):  # noqa: PLR0915
         return {"results": []}
 
     @mcp.tool()
+    @weave.op()
     def get_embeddings(text: str) -> dict:
         """Generate embeddings using Google Generative AI"""
         return genai.embed_content(
@@ -902,6 +905,7 @@ def serve(host, port, transport):  # noqa: PLR0915
         name="generate_query_embedding",
         description="Generate an embedding vector for a text query. Useful for understanding how the vector search works."
     )
+    @weave.op()
     def generate_query_embedding(text: str) -> str:
         """
         Generate an embedding vector for a text query.

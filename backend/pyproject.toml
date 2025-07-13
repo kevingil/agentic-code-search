@@ -37,6 +37,8 @@ dependencies = [
     "networkx>=3.4.2",
     "numpy>=2.2.5",
     "pandas>=2.2.3",
+    # W&B tracing for agent monitoring
+    "weave>=0.51.0",
     # Pin uvloop to version that supports Python 3.13
     "uvloop>=0.21.0",
 ]

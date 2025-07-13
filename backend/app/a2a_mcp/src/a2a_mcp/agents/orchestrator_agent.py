@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import weave
 from collections.abc import AsyncIterable
 from a2a.types import (
     SendStreamingMessageSuccessResponse,
@@ -42,6 +43,7 @@ class OrchestratorAgent(BaseAgent):
         
         # No need for separate agent - we'll handle simple questions directly
 
+    @weave.op()
     def is_simple_repository_question(self, query: str) -> bool:
         """
         Detect if this is a simple repository analysis question that can be answered directly
@@ -123,6 +125,7 @@ Respond with just "SIMPLE" or "COMPLEX".
 
 
 
+    @weave.op()
     async def generate_summary(self) -> str:
         client = genai.Client()
         response = client.models.generate_content(
@@ -134,6 +137,7 @@ Respond with just "SIMPLE" or "COMPLEX".
         )
         return response.text
 
+    @weave.op()
     def answer_user_question(self, question) -> str:
         try:
             client = genai.Client()

@@ -4,6 +4,7 @@ Manages A2A MCP agents and provides a clean interface for API routes
 """
 
 import logging
+import weave
 from typing import Any, Dict, List, Optional, AsyncIterator
 from contextlib import asynccontextmanager
 import asyncio
@@ -27,6 +28,9 @@ class AgentService:
     """Service for managing A2A MCP agents"""
     
     def __init__(self):
+        # Initialize Weave for tracing
+        weave.init('Code Search Agent')
+        
         self.orchestrator_agent: Optional[OrchestratorAgent] = None
         self.code_search_agents: Dict[str, CodeSearchAgent] = {}
         self.agent_configs: Dict[str, AgentConfig] = {}
