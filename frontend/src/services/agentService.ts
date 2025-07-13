@@ -25,11 +25,14 @@ export interface AgentStatusResponse {
 }
 
 export interface StreamChunk {
-  response_type: string
-  is_task_complete: boolean
-  require_user_input: boolean
-  content: any
+  response_type?: string
+  is_task_complete?: boolean
+  require_user_input?: boolean
+  content?: any
   error?: string
+  // For final result chunks
+  type?: string
+  response?: string
 }
 
 export interface Message {

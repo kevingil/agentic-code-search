@@ -293,6 +293,7 @@ function CodeSearch() {
       let fullContent = ""
       let lastMetadata: any = {}
       let collectedErrors: string[] = []
+      let processingMessages: string[] = []
 
       for await (const chunk of agentService.streamAgentQuery(request)) {
         if (chunk.error) {
@@ -302,25 +303,76 @@ function CodeSearch() {
           collectedErrors.push(errorMsg)
         }
 
-        if (chunk.content) {
-          fullContent += chunk.content
+        // Handle different chunk types
+        if (chunk.type === 'final_result') {
+          // This is the final response - use this as the main content
+          fullContent = chunk.response || ""
+          
+          lastMetadata = {
+            response_type: chunk.response_type || 'data',
+            is_task_complete: true,
+            require_user_input: false,
+            errors: collectedErrors.length > 0 ? collectedErrors : undefined,
+            processing_messages: processingMessages,
+          }
+        } else if (chunk.is_task_complete === true && chunk.content) {
+          // This is the final response with content as an object
+          if (typeof chunk.content === 'object' && chunk.content.summary) {
+            // Use the summary field for display
+            fullContent = chunk.content.summary
+          } else if (typeof chunk.content === 'string') {
+            // Use the content as-is
+            fullContent = chunk.content
+          } else {
+            // Fallback to JSON stringify
+            fullContent = JSON.stringify(chunk.content, null, 2)
+          }
+          
+          lastMetadata = {
+            response_type: chunk.response_type || 'data',
+            is_task_complete: true,
+            require_user_input: false,
+            errors: collectedErrors.length > 0 ? collectedErrors : undefined,
+            processing_messages: processingMessages,
+            raw_data: chunk.content, // Store the full data for artifacts
+          }
+        } else if (chunk.content && chunk.is_task_complete !== true) {
+          // This is a processing/status message - collect it but don't append to main content
+          processingMessages.push(chunk.content)
+          
+          lastMetadata = {
+            response_type: chunk.response_type || 'text',
+            is_task_complete: false,
+            require_user_input: chunk.require_user_input || false,
+            errors: collectedErrors.length > 0 ? collectedErrors : undefined,
+            processing_messages: processingMessages,
+          }
+          
+          // For processing messages, show them as temporary status
+          const statusMessage = {
+            content: processingMessages.join('\n'),
+            status: "streaming" as const,
+            metadata: lastMetadata,
+          }
+          
+          agentService.updateMessageInSession(currentSession.id, agentMessageId, statusMessage)
+          
+          setCurrentSessionMessages(prev => 
+            prev.map((msg: Message) =>
+              msg.id === agentMessageId ? { ...msg, ...statusMessage } : msg
+            )
+          )
+          continue
         }
 
-        lastMetadata = {
-          response_type: chunk.response_type,
-          is_task_complete: chunk.is_task_complete,
-          require_user_input: chunk.require_user_input,
-          errors: collectedErrors.length > 0 ? collectedErrors : undefined,
-        }
-
-        // Update the agent message with streaming content
+        // Update the agent message with final content or intermediate updates
         const parsedContent = parseAgentContent(fullContent)
         const updatedMessage = {
           content: fullContent,
-          status: chunk.is_task_complete ? "complete" as const : "streaming" as const,
+          status: (chunk.is_task_complete === true) || chunk.type === 'final_result' ? "complete" as const : "streaming" as const,
           metadata: {
             ...lastMetadata,
-            artifacts: extractArtifacts(fullContent),
+            artifacts: extractArtifacts(fullContent, lastMetadata),
             parsed_content: parsedContent,
           },
         }
@@ -341,7 +393,7 @@ function CodeSearch() {
         status: "complete" as const,
         metadata: {
           ...lastMetadata,
-          artifacts: extractArtifacts(fullContent),
+          artifacts: extractArtifacts(fullContent, lastMetadata),
           parsed_content: parsedContent,
           errors: collectedErrors.length > 0 ? collectedErrors : undefined,
         },
@@ -382,8 +434,31 @@ function CodeSearch() {
     }
   }
 
-  const extractArtifacts = (content: string): any[] => {
+  const extractArtifacts = (content: string, metadata?: any): any[] => {
     const artifacts: any[] = []
+    
+    // If metadata contains raw_data, use that for specialized artifacts
+    if (metadata?.raw_data && typeof metadata.raw_data === 'object') {
+      const rawData = metadata.raw_data
+      
+      // Check if this is a repository analysis response
+      if (rawData.repository_analysis && typeof rawData.repository_analysis === 'object') {
+        artifacts.push({
+          id: `artifact_repo_analysis_${Date.now()}`,
+          type: "repository_analysis",
+          content: rawData.repository_analysis,
+        })
+        return artifacts
+      }
+      
+      // Fallback to generic JSON artifact
+      artifacts.push({
+        id: `artifact_json_${Date.now()}`,
+        type: "json",
+        content: rawData,
+      })
+      return artifacts
+    }
     
     // Check if content contains input_required JSON - if so, don't extract it as an artifact
     try {
@@ -602,6 +677,100 @@ function CodeSearch() {
           </Box>
         )
       
+      case "repository_analysis":
+        const analysis = artifact.content
+        return (
+          <Box key={artifact.id} bg="purple.50" border="1px" borderColor="purple.200" p={4} rounded="md" my={2}>
+            <HStack justify="space-between" mb={3}>
+              <Text fontSize="sm" color="purple.700" fontWeight="medium">📊 Repository Analysis</Text>
+              <Button
+                size="xs"
+                variant="ghost"
+                colorScheme="purple"
+                onClick={() => navigator.clipboard.writeText(JSON.stringify(analysis, null, 2))}
+              >
+                Copy Data
+              </Button>
+            </HStack>
+            
+            <VStack align="stretch" gap={3}>
+              {/* Language Breakdown */}
+              {analysis.language_breakdown && (
+                <Box>
+                  <Text fontSize="sm" fontWeight="medium" color="purple.800" mb={2}>
+                    💻 Languages ({analysis.file_structure?.total_files || 0} files)
+                  </Text>
+                  <VStack align="stretch" gap={1}>
+                    {Object.entries(analysis.language_breakdown).map(([lang, data]: [string, any]) => (
+                      <HStack key={lang} justify="space-between">
+                        <Text fontSize="sm" color="purple.700">{lang}</Text>
+                        <HStack gap={2}>
+                          <Text fontSize="sm" color="purple.600">{data.files} files</Text>
+                          <Text fontSize="sm" color="purple.800" fontWeight="medium">{data.percentage}</Text>
+                        </HStack>
+                      </HStack>
+                    ))}
+                  </VStack>
+                </Box>
+              )}
+
+              {/* File Structure */}
+              {analysis.file_structure && (
+                <Box>
+                  <Text fontSize="sm" fontWeight="medium" color="purple.800" mb={2}>
+                    📁 Structure
+                  </Text>
+                  <VStack align="stretch" gap={1}>
+                    {analysis.file_structure.directories && analysis.file_structure.directories.length > 0 && (
+                      <HStack>
+                        <Text fontSize="sm" color="purple.600" minW="20">Directories:</Text>
+                        <Text fontSize="sm" color="purple.700">
+                          {analysis.file_structure.directories.join(", ")}
+                        </Text>
+                      </HStack>
+                    )}
+                    {analysis.file_structure.key_files && analysis.file_structure.key_files.length > 0 && (
+                      <HStack>
+                        <Text fontSize="sm" color="purple.600" minW="20">Key files:</Text>
+                        <Text fontSize="sm" color="purple.700" fontFamily="mono">
+                          {analysis.file_structure.key_files.join(", ")}
+                        </Text>
+                      </HStack>
+                    )}
+                  </VStack>
+                </Box>
+              )}
+
+              {/* Technologies */}
+              {(analysis.technologies?.length > 0 || analysis.frameworks?.length > 0) && (
+                <Box>
+                  <Text fontSize="sm" fontWeight="medium" color="purple.800" mb={2}>
+                    🛠️ Technologies
+                  </Text>
+                  <VStack align="stretch" gap={1}>
+                    {analysis.technologies?.length > 0 && (
+                      <HStack>
+                        <Text fontSize="sm" color="purple.600" minW="20">Tools:</Text>
+                        <Text fontSize="sm" color="purple.700">
+                          {analysis.technologies.join(", ")}
+                        </Text>
+                      </HStack>
+                    )}
+                    {analysis.frameworks?.length > 0 && (
+                      <HStack>
+                        <Text fontSize="sm" color="purple.600" minW="20">Frameworks:</Text>
+                        <Text fontSize="sm" color="purple.700">
+                          {analysis.frameworks.join(", ")}
+                        </Text>
+                      </HStack>
+                    )}
+                  </VStack>
+                </Box>
+              )}
+            </VStack>
+          </Box>
+        )
+      
       default:
         return null
     }
@@ -609,6 +778,30 @@ function CodeSearch() {
 
   const formatMessageContent = (message: Message) => {
     const content = message.content
+    
+    // Check if this is a processing/status message
+    const processingMessages = message.metadata?.processing_messages
+    const isProcessing = message.status === "streaming" && processingMessages && processingMessages.length > 0
+    
+    // Show processing messages with special styling
+    if (isProcessing && !content.trim()) {
+      return (
+        <VStack align="stretch" gap={2}>
+          <Box bg="blue.50" border="1px" borderColor="blue.200" p={3} rounded="md">
+            <HStack>
+              <Text fontSize="sm" color="blue.700" fontWeight="medium">
+                🔄 Processing...
+              </Text>
+            </HStack>
+            {processingMessages.map((msg: string, index: number) => (
+              <Text key={index} fontSize="sm" color="blue.600" mt={1}>
+                {msg}
+              </Text>
+            ))}
+          </Box>
+        </VStack>
+      )
+    }
     
     // Check if there are any errors in metadata
     const errors = message.metadata?.errors
