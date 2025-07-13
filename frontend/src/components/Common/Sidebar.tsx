@@ -83,7 +83,7 @@ const Sidebar = () => {
         bg="bg.subtle"
         top={0}
         minW="xs"
-        h="100vh"
+        h="calc(100vh - 72px)"
         p={4}
       >
         <Box w="100%">

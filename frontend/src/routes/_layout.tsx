@@ -20,7 +20,7 @@ function Layout() {
   return (
     <Flex direction="column" h="100vh">
       <Navbar />
-      <Flex flex="1" overflow="hidden">
+      <Flex flex="1" overflow="hidden" h="calc(100vh - 72px)">
         <Sidebar />
         <Flex flex="1" direction="column" p={4} overflowY="auto">
           <Outlet />

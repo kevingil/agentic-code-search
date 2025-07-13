@@ -13,7 +13,6 @@ function Navbar() {
     <Flex
       display={display}
       justify="space-between"
-      position="sticky"
       color="white"
       align="center"
       bg="bg.muted"
