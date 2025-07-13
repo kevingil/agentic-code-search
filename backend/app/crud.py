@@ -31,19 +31,31 @@ def update_user(*, session: Session, db_user: User, user_in: UserUpdate) -> Any:
     return db_user
 
 
-def get_user_by_email(*, session: Session, email: str) -> User | None:
-    statement = select(User).where(User.email == email)
-    session_user = session.exec(statement).first()
-    return session_user
+import traceback
 
+def get_user_by_email(*, session: Session, email: str) -> User | None:
+    try:
+        statement = select(User).where(User.email == email)
+        session_user = session.exec(statement).first()
+        return session_user
+    except Exception as e:
+        print(f"Exception in get_user_by_email: {e}")
+        traceback.print_exc()
+        return None
 
 def authenticate(*, session: Session, email: str, password: str) -> User | None:
-    db_user = get_user_by_email(session=session, email=email)
-    if not db_user:
+    try:
+        db_user = get_user_by_email(session=session, email=email)
+        print(f"db_user: {db_user}")
+        if not db_user:
+            return None
+        if not verify_password(password, db_user.hashed_password):
+            return None
+        return db_user
+    except Exception as e:
+        print(f"Exception in authenticate: {e}")
+        traceback.print_exc()
         return None
-    if not verify_password(password, db_user.hashed_password):
-        return None
-    return db_user
 
 
 def create_item(*, session: Session, item_in: ItemCreate, owner_id: uuid.UUID) -> Item:
