@@ -32,6 +32,10 @@ interface Message {
     is_task_complete?: boolean
     require_user_input?: boolean
     artifacts?: any[]
+    parsed_content?: {
+      type: 'input_required' | 'artifact' | 'message'
+      data: any
+    }
   }
 }
 
@@ -308,12 +312,14 @@ function CodeSearch() {
         }
 
         // Update the agent message with streaming content
+        const parsedContent = parseAgentContent(fullContent)
         const updatedMessage = {
           content: fullContent,
           status: chunk.is_task_complete ? "complete" as const : "streaming" as const,
           metadata: {
             ...lastMetadata,
             artifacts: extractArtifacts(fullContent),
+            parsed_content: parsedContent,
           },
         }
 
@@ -328,12 +334,14 @@ function CodeSearch() {
       }
 
       // Final update
+      const parsedContent = parseAgentContent(fullContent)
       const finalMessage = {
         content: fullContent,
         status: "complete" as const,
         metadata: {
           ...lastMetadata,
           artifacts: extractArtifacts(fullContent),
+          parsed_content: parsedContent,
         },
       }
 
@@ -375,12 +383,125 @@ function CodeSearch() {
   }
 
   const extractArtifacts = (content: string): any[] => {
+    const artifacts: any[] = []
+    
+    // Check if content contains input_required JSON - if so, don't extract it as an artifact
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*?\}/g)
+      if (jsonMatch) {
+        for (const match of jsonMatch) {
+          try {
+            const parsed = JSON.parse(match)
+            if (parsed && typeof parsed === 'object' && parsed.status === 'input_required') {
+              // Don't extract input_required JSON as artifacts
+              continue
+            }
+          } catch (e) {
+            // Not valid JSON, continue
+          }
+        }
+      }
+    } catch (e) {
+      // Continue with normal processing
+    }
+    
+    // Try to parse entire content as JSON first to check for structured responses
+    try {
+      const parsed = JSON.parse(content.trim())
+      if (parsed && typeof parsed === 'object') {
+        // If it's a structured JSON response, treat it as an artifact unless it's input_required
+        if (parsed.status !== 'input_required') {
+          artifacts.push({
+            id: `artifact_json_${Date.now()}`,
+            type: "json",
+            content: parsed,
+          })
+        }
+        return artifacts
+      }
+    } catch (e) {
+      // Not pure JSON, continue with other parsing
+    }
+    
+    // Extract code blocks (but skip any that contain input_required JSON)
     const codeBlocks = content.match(/```[\s\S]*?```/g) || []
-    return codeBlocks.map((block, index) => ({
-      id: `artifact_${index}`,
-      type: "code",
-      content: block,
-    }))
+    codeBlocks.forEach((block, index) => {
+      // Check if this code block contains input_required JSON
+      try {
+        const codeContent = block.slice(3, -3).trim()
+        const parsed = JSON.parse(codeContent)
+        if (parsed && typeof parsed === 'object' && parsed.status === 'input_required') {
+          return // Skip this code block
+        }
+      } catch (e) {
+        // Not JSON or not input_required, include it
+      }
+      
+      artifacts.push({
+        id: `artifact_code_${index}`,
+        type: "code",
+        content: block,
+      })
+    })
+    
+    // Check for JSON blocks in the content and exclude input_required ones
+    const jsonPattern = /\{[\s\S]*?\}/g
+    const jsonMatches = [...content.matchAll(jsonPattern)]
+    jsonMatches.forEach((match, index) => {
+      try {
+        const parsed = JSON.parse(match[0])
+        if (parsed && typeof parsed === 'object' && parsed.status !== 'input_required') {
+          // Only add non-input_required JSON as artifacts
+          artifacts.push({
+            id: `artifact_json_inline_${index}`,
+            type: "json",
+            content: parsed,
+          })
+        }
+      } catch (e) {
+        // Not valid JSON, skip
+      }
+    })
+    
+    // Extract file paths or structured data patterns
+    const filePathPattern = /(?:^|\s)([a-zA-Z0-9_-]+\/[a-zA-Z0-9_/.,-]+\.[a-zA-Z0-9]+)(?:\s|$)/gm
+    const filePaths = [...content.matchAll(filePathPattern)]
+    if (filePaths.length > 3) { // Only if there are multiple file paths
+      artifacts.push({
+        id: `artifact_files_${Date.now()}`,
+        type: "file_list",
+        content: filePaths.map(match => match[1]),
+      })
+    }
+    
+    return artifacts
+  }
+
+  const parseAgentContent = (content: string) => {
+    // Try to parse as JSON first
+    try {
+      const parsed = JSON.parse(content)
+      if (parsed && typeof parsed === 'object') {
+        if (parsed.status === 'input_required' && parsed.question) {
+          return {
+            type: 'input_required' as const,
+            data: parsed
+          }
+        } else {
+          return {
+            type: 'artifact' as const,
+            data: parsed
+          }
+        }
+      }
+    } catch (e) {
+      // Not JSON, treat as regular message
+    }
+    
+    return {
+      type: 'message' as const,
+      data: content
+    }
   }
 
   const handleClearConversation = async () => {
@@ -423,17 +544,185 @@ function CodeSearch() {
     window.dispatchEvent(new CustomEvent('sessionListChanged'))
   }
 
-  const formatMessageContent = (content: string) => {
-    const parts = content.split(/(```[\s\S]*?```)/g)
-    return parts.map((part, index) => {
-      if (part.startsWith("```")) {
+  const renderArtifact = (artifact: any) => {
+    switch (artifact.type) {
+      case "code":
         return (
-          <Box key={index} bg="gray.900" color="white" p={4} rounded="md" my={2} overflow="auto">
+          <Box key={artifact.id} bg="gray.900" color="white" p={4} rounded="md" my={2} overflow="auto">
+            <HStack justify="space-between" mb={2}>
+              <Text fontSize="sm" color="gray.300">Code Block</Text>
+              <Button
+                size="xs"
+                variant="ghost"
+                colorScheme="gray"
+                onClick={() => navigator.clipboard.writeText(artifact.content.slice(3, -3))}
+              >
+                Copy
+              </Button>
+            </HStack>
             <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>
-              <code>{part.slice(3, -3)}</code>
+              <code>{artifact.content.slice(3, -3)}</code>
             </pre>
           </Box>
         )
+      
+      case "json":
+        return (
+          <Box key={artifact.id} bg="blue.50" border="1px" borderColor="blue.200" p={4} rounded="md" my={2}>
+            <HStack justify="space-between" mb={2}>
+              <Text fontSize="sm" color="blue.700" fontWeight="medium">Structured Data</Text>
+              <Button
+                size="xs"
+                variant="ghost"
+                colorScheme="blue"
+                onClick={() => navigator.clipboard.writeText(JSON.stringify(artifact.content, null, 2))}
+              >
+                Copy JSON
+              </Button>
+            </HStack>
+            <Box bg="white" p={3} rounded="md" overflow="auto">
+              <pre style={{ margin: 0, fontSize: "14px" }}>
+                <code>{JSON.stringify(artifact.content, null, 2)}</code>
+              </pre>
+            </Box>
+          </Box>
+        )
+      
+      case "file_list":
+        return (
+          <Box key={artifact.id} bg="green.50" border="1px" borderColor="green.200" p={4} rounded="md" my={2}>
+            <Text fontSize="sm" color="green.700" fontWeight="medium" mb={2}>Related Files</Text>
+            <VStack align="start" gap={1}>
+              {artifact.content.map((file: string, index: number) => (
+                <Text key={index} fontSize="sm" fontFamily="mono" color="green.800">
+                  {file}
+                </Text>
+              ))}
+            </VStack>
+          </Box>
+        )
+      
+      default:
+        return null
+    }
+  }
+
+  const formatMessageContent = (message: Message) => {
+    const content = message.content
+    
+    // Check if content contains input_required JSON and extract just the question text
+    const jsonPattern = /\{[\s\S]*?\}/g
+    const jsonMatches = [...content.matchAll(jsonPattern)]
+    let hasInputRequired = false
+    let questionText = null
+    
+    for (const match of jsonMatches) {
+      try {
+        const parsed = JSON.parse(match[0])
+        if (parsed && typeof parsed === 'object' && parsed.status === 'input_required' && parsed.question) {
+          hasInputRequired = true
+          questionText = parsed.question
+          break
+        }
+      } catch (e) {
+        // Not valid JSON, continue
+      }
+    }
+    
+    // If we found input_required JSON, show it as a normal message with just the question
+    if (hasInputRequired && questionText) {
+      // Extract any text content (removing the JSON part and cleaning up)
+      let textContent = content
+      for (const match of jsonMatches) {
+        try {
+          const parsed = JSON.parse(match[0])
+          if (parsed && typeof parsed === 'object' && parsed.status === 'input_required') {
+            textContent = textContent.replace(match[0], '').trim()
+          }
+        } catch (e) {
+          // Continue
+        }
+      }
+      
+      // Clean up any remaining JSON fragments, code markers, etc.
+      textContent = textContent
+        .replace(/```json/g, '')
+        .replace(/```/g, '')
+        .replace(/^\s*json\s*$/gm, '')
+        .replace(/\n\s*\n/g, '\n')
+        .trim()
+      
+      // If text content just says the question, don't duplicate it
+      if (textContent.includes(questionText)) {
+        return <Text whiteSpace="pre-wrap">{textContent}</Text>
+      }
+      
+      // Combine text content with question, removing any redundant parts
+      const finalText = textContent && questionText 
+        ? `${textContent}\n\n${questionText}` 
+        : questionText || textContent
+      
+      return (
+        <Text whiteSpace="pre-wrap">{finalText}</Text>
+      )
+    }
+    
+    // Check if this is a pure input_required response
+    try {
+      const parsed = JSON.parse(content.trim())
+      if (parsed && typeof parsed === 'object' && parsed.status === 'input_required' && parsed.question) {
+        return (
+          <Text whiteSpace="pre-wrap">{parsed.question}</Text>
+        )
+      }
+    } catch (e) {
+      // Not pure JSON or not input_required, continue with other logic
+    }
+    
+    // Handle parsed content types from metadata
+    if (message.metadata?.parsed_content) {
+      const { type, data } = message.metadata.parsed_content
+      
+      if (type === 'input_required') {
+        return (
+          <Text whiteSpace="pre-wrap">{data.question}</Text>
+        )
+      }
+      
+      if (type === 'artifact') {
+        return (
+          <VStack align="stretch" gap={2}>
+            <Text>The agent provided structured data:</Text>
+            {renderArtifact({ id: 'parsed_artifact', type: 'json', content: data })}
+          </VStack>
+        )
+      }
+    }
+    
+    // Default message formatting with artifacts
+    const artifacts = message.metadata?.artifacts || []
+    
+    // If we have artifacts, show content and artifacts separately
+    if (artifacts.length > 0) {
+      const parts = content.split(/(```[\s\S]*?```)/g)
+      const textParts = parts.filter(part => !part.startsWith("```"))
+      const textContent = textParts.join("").trim()
+      
+      return (
+        <VStack align="stretch" gap={3}>
+          {textContent && (
+            <Text whiteSpace="pre-wrap">{textContent}</Text>
+          )}
+          {artifacts.map(artifact => renderArtifact(artifact))}
+        </VStack>
+      )
+    }
+    
+    // Fallback to original formatting
+    const parts = content.split(/(```[\s\S]*?```)/g)
+    return parts.map((part, index) => {
+      if (part.startsWith("```")) {
+        return renderArtifact({ id: `inline_code_${index}`, type: 'code', content: part })
       }
       return (
         <Text key={index} whiteSpace="pre-wrap">
@@ -672,7 +961,7 @@ function CodeSearch() {
                             <Text color="red.600">{message.content}</Text>
                           </Box>
                         ) : (
-                          <Box>{formatMessageContent(message.content)}</Box>
+                          <Box>{formatMessageContent(message)}</Box>
                         )}
                       </Box>
                     </Box>
