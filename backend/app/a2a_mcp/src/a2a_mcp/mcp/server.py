@@ -3,31 +3,34 @@ import json
 import os
 import sqlite3
 import traceback
-
+import zipfile
+import io
+from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
-
 import google.generativeai as genai
 import numpy as np
 import pandas as pd
 import requests
-
+import tempfile
 from ..mcp_config import mcp_settings
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.utilities.logging import get_logger
-
+import psycopg2
 
 logger = get_logger(__name__)
 # Calculate the path to agent_cards directory relative to this file
-AGENT_CARDS_DIR = Path(__file__).parent.parent.parent.parent / 'agent_cards'
-MODEL = 'models/embedding-001'
-SQLLITE_DB = Path(__file__).parent.parent.parent.parent.parent.parent / 'code_search.db'
+AGENT_CARDS_DIR = Path(__file__).parent.parent.parent.parent / "agent_cards"
+MODEL = "models/embedding-001"
+SQLLITE_DB = Path(__file__).parent.parent.parent.parent.parent.parent / "code_search.db"
+ALLOWED_EXTENSIONS = {".py", ".js", ".ts", ".java", ".c", ".cpp", ".go", ".rb"}
 
 
 def init_api_key():
     """Initialize the API key for Google Generative AI."""
     if not mcp_settings.GOOGLE_API_KEY:
-        logger.error('GOOGLE_API_KEY is not set')
-        raise ValueError('GOOGLE_API_KEY is not set')
+        logger.error("GOOGLE_API_KEY is not set")
+        raise ValueError("GOOGLE_API_KEY is not set")
 
     genai.configure(api_key=mcp_settings.GOOGLE_API_KEY)
 
@@ -44,8 +47,8 @@ def generate_embeddings(text):
     return genai.embed_content(
         model=MODEL,
         content=text,
-        task_type='retrieval_document',
-    )['embedding']
+        task_type="retrieval_document",
+    )["embedding"]
 
 
 def load_agent_cards():
@@ -61,39 +64,37 @@ def load_agent_cards():
     dir_path = Path(AGENT_CARDS_DIR)
     if not dir_path.is_dir():
         logger.error(
-            f'Agent cards directory not found or is not a directory: {AGENT_CARDS_DIR}'
+            f"Agent cards directory not found or is not a directory: {AGENT_CARDS_DIR}"
         )
         return card_uris, agent_cards
 
-    logger.info(f'Loading agent cards from card repo: {AGENT_CARDS_DIR}')
+    logger.info(f"Loading agent cards from card repo: {AGENT_CARDS_DIR}")
 
     for filename in os.listdir(AGENT_CARDS_DIR):
-        if filename.lower().endswith('.json'):
+        if filename.lower().endswith(".json"):
             file_path = dir_path / filename
 
             if file_path.is_file():
-                logger.info(f'Reading file: {filename}')
+                logger.info(f"Reading file: {filename}")
                 try:
-                    with file_path.open('r', encoding='utf-8') as f:
+                    with file_path.open("r", encoding="utf-8") as f:
                         data = json.load(f)
                         logger.debug(f"Loaded agent card from {filename}: {type(data)}")
                         logger.debug(f"Agent card data: {data}")
                         card_uris.append(
-                            f'resource://agent_cards/{Path(filename).stem}'
+                            f"resource://agent_cards/{Path(filename).stem}"
                         )
                         agent_cards.append(data)
                 except json.JSONDecodeError as jde:
-                    logger.error(f'JSON Decoder Error {jde}')
+                    logger.error(f"JSON Decoder Error {jde}")
                 except OSError as e:
-                    logger.error(f'Error reading file {filename}: {e}.')
+                    logger.error(f"Error reading file {filename}: {e}.")
                 except Exception as e:
                     logger.error(
-                        f'An unexpected error occurred processing {filename}: {e}',
+                        f"An unexpected error occurred processing {filename}: {e}",
                         exc_info=True,
                     )
-    logger.info(
-        f'Finished loading agent cards. Found {len(agent_cards)} cards.'
-    )
+    logger.info(f"Finished loading agent cards. Found {len(agent_cards)} cards.")
     return card_uris, agent_cards
 
 
@@ -107,23 +108,21 @@ def build_agent_card_embeddings() -> pd.DataFrame:
         during the embedding generation process.
     """
     card_uris, agent_cards = load_agent_cards()
-    logger.info('Generating Embeddings for agent cards')
+    logger.info("Generating Embeddings for agent cards")
     try:
         if agent_cards:
-            df = pd.DataFrame(
-                {'card_uri': card_uris, 'agent_card': agent_cards}
-            )
-            df['card_embeddings'] = df.apply(
-                lambda row: generate_embeddings(json.dumps(row['agent_card'])),
+            df = pd.DataFrame({"card_uri": card_uris, "agent_card": agent_cards})
+            df["card_embeddings"] = df.apply(
+                lambda row: generate_embeddings(json.dumps(row["agent_card"])),
                 axis=1,
             )
-            logger.info('Done generating embeddings for agent cards')
+            logger.info("Done generating embeddings for agent cards")
             return df
         else:
-            logger.warning('No agent cards loaded, returning empty DataFrame')
+            logger.warning("No agent cards loaded, returning empty DataFrame")
             return pd.DataFrame()
     except Exception as e:
-        logger.error(f'An unexpected error occurred : {e}.', exc_info=True)
+        logger.error(f"An unexpected error occurred : {e}.", exc_info=True)
         return pd.DataFrame()
 
 
@@ -139,14 +138,14 @@ def serve(host, port, transport):  # noqa: PLR0915
         ValueError: If the 'GOOGLE_API_KEY' environment variable is not set.
     """
     init_api_key()
-    logger.info('Starting Agent Cards MCP Server')
-    mcp = FastMCP('agent-cards', host=host, port=port)
+    logger.info("Starting Agent Cards MCP Server")
+    mcp = FastMCP("agent-cards", host=host, port=port)
 
     df = build_agent_card_embeddings()
 
     @mcp.tool(
-        name='find_agent',
-        description='Finds the most relevant agent card based on a natural language query string.',
+        name="find_agent",
+        description="Finds the most relevant agent card based on a natural language query string.",
     )
     def find_agent(query: str) -> str:
         """Finds the most relevant agent card based on a query string.
@@ -166,33 +165,35 @@ def serve(host, port, transport):  # noqa: PLR0915
             to the input query based on embedding similarity.
         """
         logger.info(f"find_agent called with query: {query}")
-        
+
         try:
             if df is None or df.empty:
                 logger.error("No agent cards loaded")
                 return json.dumps({"error": "No agent cards available"})
-            
+
             query_embedding = genai.embed_content(
-                model=MODEL, content=query, task_type='retrieval_query'
+                model=MODEL, content=query, task_type="retrieval_query"
             )
             dot_products = np.dot(
-                np.stack(df['card_embeddings']), query_embedding['embedding']
+                np.stack(df["card_embeddings"]), query_embedding["embedding"]
             )
             best_match_index = np.argmax(dot_products)
             logger.debug(
-                f'Found best match at index {best_match_index} with score {dot_products[best_match_index]}'
+                f"Found best match at index {best_match_index} with score {dot_products[best_match_index]}"
             )
-            
+
             # Return the agent card as a JSON string
-            agent_card = df.iloc[best_match_index]['agent_card']
+            agent_card = df.iloc[best_match_index]["agent_card"]
             logger.debug(f"Agent card type: {type(agent_card)}")
             logger.debug(f"Agent card content: {agent_card}")
-            
+
             # Ensure we return a proper JSON string with robust serialization
             try:
                 if isinstance(agent_card, dict):
                     # Use a custom JSON encoder that handles non-serializable objects
-                    json_result = json.dumps(agent_card, default=str, ensure_ascii=False)
+                    json_result = json.dumps(
+                        agent_card, default=str, ensure_ascii=False
+                    )
                     logger.debug(f"JSON result: {json_result}")
                     return json_result
                 elif isinstance(agent_card, str):
@@ -208,16 +209,23 @@ def serve(host, port, transport):  # noqa: PLR0915
                     return json.dumps({"content": str(agent_card)}, default=str)
             except Exception as serialize_error:
                 logger.error(f"JSON serialization error: {serialize_error}")
-                return json.dumps({"error": f"Serialization failed: {str(serialize_error)}"}, default=str)
+                return json.dumps(
+                    {"error": f"Serialization failed: {str(serialize_error)}"},
+                    default=str,
+                )
         except Exception as e:
             logger.error(f"Error in find_agent: {e}")
             return json.dumps({"error": f"Failed to find agent: {str(e)}"})
 
     @mcp.tool()
-    def semantic_code_search(query: str, file_pattern: str = "*", language: str = "python"):
+    def semantic_code_search(
+        query: str, file_pattern: str = "*", language: str = "python"
+    ):
         """Perform semantic code search across the codebase."""
-        logger.info(f'Semantic code search: {query} in {file_pattern} files (language: {language})')
-        
+        logger.info(
+            f"Semantic code search: {query} in {file_pattern} files (language: {language})"
+        )
+
         # Return dummy semantic search results
         dummy_search_results = [
             {
@@ -229,7 +237,7 @@ def serve(host, port, transport):  # noqa: PLR0915
                 "context": "FastAPI endpoint for querying agents with authentication",
                 "function_name": "query_agent",
                 "class_name": None,
-                "docstring": "Query an agent with a specific request"
+                "docstring": "Query an agent with a specific request",
             },
             {
                 "file_path": "backend/app/services/agent_service.py",
@@ -240,7 +248,7 @@ def serve(host, port, transport):  # noqa: PLR0915
                 "context": "Service layer method for agent queries with streaming support",
                 "function_name": "query_agent",
                 "class_name": "AgentService",
-                "docstring": "Query an agent and return streaming responses"
+                "docstring": "Query an agent and return streaming responses",
             },
             {
                 "file_path": "backend/app/a2a_mcp/src/a2a_mcp/agents/orchestrator_agent.py",
@@ -251,12 +259,12 @@ def serve(host, port, transport):  # noqa: PLR0915
                 "context": "Orchestrator agent streaming method for handling complex queries",
                 "function_name": "stream",
                 "class_name": "OrchestratorAgent",
-                "docstring": "Execute and stream response"
-            }
+                "docstring": "Execute and stream response",
+            },
         ]
-        
+
         # Filter results based on query content
-        if 'authentication' in query.lower() or 'auth' in query.lower():
+        if "authentication" in query.lower() or "auth" in query.lower():
             auth_results = [
                 {
                     "file_path": "backend/app/core/security.py",
@@ -267,7 +275,7 @@ def serve(host, port, transport):  # noqa: PLR0915
                     "context": "JWT token creation for authentication",
                     "function_name": "create_access_token",
                     "class_name": None,
-                    "docstring": "Create access token for authentication"
+                    "docstring": "Create access token for authentication",
                 },
                 {
                     "file_path": "backend/app/api/deps.py",
@@ -278,18 +286,18 @@ def serve(host, port, transport):  # noqa: PLR0915
                     "context": "Dependency for getting current authenticated user",
                     "function_name": "get_current_user",
                     "class_name": None,
-                    "docstring": "Get current authenticated user from token"
-                }
+                    "docstring": "Get current authenticated user from token",
+                },
             ]
             return {"search_results": auth_results}
-        
+
         return {"search_results": dummy_search_results}
 
     @mcp.tool()
     def analyze_code_quality(file_path: str, analysis_type: str = "comprehensive"):
         """Analyze code quality for a specific file or pattern."""
-        logger.info(f'Code quality analysis: {file_path} (type: {analysis_type})')
-        
+        logger.info(f"Code quality analysis: {file_path} (type: {analysis_type})")
+
         # Return dummy code analysis results
         dummy_analysis_results = {
             "file_path": file_path,
@@ -300,22 +308,22 @@ def serve(host, port, transport):  # noqa: PLR0915
                     "severity": "medium",
                     "description": "Function has too many parameters (6/5)",
                     "suggestion": "Consider using a configuration object or breaking the function into smaller parts",
-                    "rule": "complexity/max-params"
+                    "rule": "complexity/max-params",
                 },
                 {
                     "line_number": 78,
                     "severity": "low",
                     "description": "Missing type annotation for return value",
                     "suggestion": "Add return type annotation: -> Dict[str, Any]",
-                    "rule": "type-hints/missing-return-type"
+                    "rule": "type-hints/missing-return-type",
                 },
                 {
                     "line_number": 112,
                     "severity": "high",
                     "description": "Potential SQL injection vulnerability",
                     "suggestion": "Use parameterized queries or ORM methods",
-                    "rule": "security/sql-injection"
-                }
+                    "rule": "security/sql-injection",
+                },
             ],
             "metrics": {
                 "complexity": 7.2,
@@ -323,20 +331,21 @@ def serve(host, port, transport):  # noqa: PLR0915
                 "test_coverage": 85.0,
                 "lines_of_code": 156,
                 "cyclomatic_complexity": 12,
-                "technical_debt_ratio": 0.08
+                "technical_debt_ratio": 0.08,
             },
             "suggestions": [
                 "Consider breaking down large functions into smaller, more focused functions",
                 "Add comprehensive docstrings to all public methods",
                 "Implement error handling for edge cases",
-                "Add unit tests for uncovered code paths"
-            ]
+                "Add unit tests for uncovered code paths",
+            ],
         }
-        
+
         # Customize results based on analysis type
         if analysis_type == "security":
             dummy_analysis_results["issues"] = [
-                issue for issue in dummy_analysis_results["issues"] 
+                issue
+                for issue in dummy_analysis_results["issues"]
                 if issue["severity"] == "high" or "security" in issue["rule"]
             ]
         elif analysis_type == "performance":
@@ -346,17 +355,21 @@ def serve(host, port, transport):  # noqa: PLR0915
                     "severity": "medium",
                     "description": "Inefficient database query in loop",
                     "suggestion": "Use bulk operations or optimize with joins",
-                    "rule": "performance/n-plus-one-query"
+                    "rule": "performance/n-plus-one-query",
                 }
             ]
-        
+
         return dummy_analysis_results
 
     @mcp.tool()
-    def generate_documentation(file_path: str, doc_type: str = "docstrings", style: str = "google"):
+    def generate_documentation(
+        file_path: str, doc_type: str = "docstrings", style: str = "google"
+    ):
         """Generate documentation for code files."""
-        logger.info(f'Generate documentation: {file_path} (type: {doc_type}, style: {style})')
-        
+        logger.info(
+            f"Generate documentation: {file_path} (type: {doc_type}, style: {style})"
+        )
+
         # Return dummy documentation results
         dummy_doc_results = {
             "file_path": file_path,
@@ -367,41 +380,38 @@ def serve(host, port, transport):  # noqa: PLR0915
                 "function_docstrings": [
                     {
                         "function_name": "query_agent",
-                        "docstring": '"""Query an agent with a specific request.\n\nArgs:\n    request: AgentQueryRequest containing query and context information\n    current_user: User object for authentication\n\nReturns:\n    AgentQueryResponse: Response containing agent results\n\nRaises:\n    HTTPException: If query validation fails or agent is unavailable\n"""'
+                        "docstring": '"""Query an agent with a specific request.\n\nArgs:\n    request: AgentQueryRequest containing query and context information\n    current_user: User object for authentication\n\nReturns:\n    AgentQueryResponse: Response containing agent results\n\nRaises:\n    HTTPException: If query validation fails or agent is unavailable\n"""',
                     },
                     {
                         "function_name": "get_agents_status",
-                        "docstring": '"""Get status of all available agents.\n\nReturns:\n    List[AgentStatusResponse]: List of agent status information\n\nRaises:\n    HTTPException: If unable to retrieve agent status\n"""'
-                    }
+                        "docstring": '"""Get status of all available agents.\n\nReturns:\n    List[AgentStatusResponse]: List of agent status information\n\nRaises:\n    HTTPException: If unable to retrieve agent status\n"""',
+                    },
                 ],
                 "class_docstrings": [
                     {
                         "class_name": "AgentQueryRequest",
-                        "docstring": '"""Request model for agent queries.\n\nAttributes:\n    query: The search query string\n    context_id: Unique identifier for the session context\n    agent_type: Type of agent to query (orchestrator, code_search, etc.)\n"""'
+                        "docstring": '"""Request model for agent queries.\n\nAttributes:\n    query: The search query string\n    context_id: Unique identifier for the session context\n    agent_type: Type of agent to query (orchestrator, code_search, etc.)\n"""',
                     }
-                ]
+                ],
             },
             "existing_docs": {
                 "coverage_score": 65.0,
                 "missing_docstrings": ["helper_function", "internal_method"],
-                "outdated_docstrings": ["legacy_function"]
+                "outdated_docstrings": ["legacy_function"],
             },
             "suggestions": [
                 "Add comprehensive module-level docstring",
                 "Include type hints in all function signatures",
                 "Add examples in docstrings for complex functions",
-                "Document exception handling patterns"
-            ]
+                "Document exception handling patterns",
+            ],
         }
-        
+
         # Customize based on documentation type
         if doc_type == "api_docs":
             dummy_doc_results["generated_docs"]["api_spec"] = {
                 "openapi_version": "3.0.0",
-                "info": {
-                    "title": "Code Search API",
-                    "version": "1.0.0"
-                },
+                "info": {"title": "Code Search API", "version": "1.0.0"},
                 "paths": {
                     "/agents/query": {
                         "post": {
@@ -409,24 +419,26 @@ def serve(host, port, transport):  # noqa: PLR0915
                             "parameters": ["request", "current_user"],
                             "responses": {
                                 "200": {"description": "Successful response"}
-                            }
+                            },
                         }
                     }
-                }
+                },
             }
-        
+
         return dummy_doc_results
 
     @mcp.tool()
-    def search_code_patterns(pattern: str, file_extensions: list = None, exclude_dirs: list = None):
+    def search_code_patterns(
+        pattern: str, file_extensions: list = None, exclude_dirs: list = None
+    ):
         """Search for specific code patterns using regex or AST analysis."""
-        logger.info(f'Search code patterns: {pattern}')
-        
+        logger.info(f"Search code patterns: {pattern}")
+
         if file_extensions is None:
             file_extensions = [".py", ".js", ".ts", ".java"]
         if exclude_dirs is None:
             exclude_dirs = ["node_modules", "__pycache__", ".git"]
-        
+
         # Return dummy pattern search results
         dummy_pattern_results = {
             "pattern": pattern,
@@ -438,31 +450,31 @@ def serve(host, port, transport):  # noqa: PLR0915
                     "line_number": 15,
                     "match": "from fastapi import APIRouter, HTTPException, Depends",
                     "context": "Import statement for FastAPI dependencies",
-                    "pattern_type": "import"
+                    "pattern_type": "import",
                 },
                 {
-                    "file_path": "backend/app/services/agent_service.py", 
+                    "file_path": "backend/app/services/agent_service.py",
                     "line_number": 8,
                     "match": "from typing import Any, Dict, List, Optional, AsyncIterator",
                     "context": "Type hint imports",
-                    "pattern_type": "import"
+                    "pattern_type": "import",
                 },
                 {
                     "file_path": "backend/app/core/security.py",
                     "line_number": 12,
                     "match": "from datetime import datetime, timedelta",
                     "context": "DateTime utilities import",
-                    "pattern_type": "import"
-                }
+                    "pattern_type": "import",
+                },
             ],
             "summary": {
                 "total_matches": 3,
                 "files_searched": 45,
                 "pattern_type": "regex",
-                "search_time_ms": 234
-            }
+                "search_time_ms": 234,
+            },
         }
-        
+
         # Customize based on pattern type
         if "async def" in pattern:
             dummy_pattern_results["matches"] = [
@@ -471,41 +483,41 @@ def serve(host, port, transport):  # noqa: PLR0915
                     "line_number": 25,
                     "match": "async def query_agent(request: AgentQueryRequest, current_user: User = Depends(get_current_user)):",
                     "context": "Async FastAPI endpoint",
-                    "pattern_type": "function_definition"
+                    "pattern_type": "function_definition",
                 },
                 {
                     "file_path": "backend/app/services/agent_service.py",
                     "line_number": 67,
                     "match": "async def query_agent(self, agent_type: str, query: str, context_id: str, task_id: str):",
                     "context": "Async service method",
-                    "pattern_type": "function_definition"
-                }
+                    "pattern_type": "function_definition",
+                },
             ]
-        
+
         return dummy_pattern_results
 
     @mcp.tool()
     def query_code_database(query: str) -> dict:
         """Query the code analysis database with SQL-like syntax.
-        
+
         This tool provides access to indexed code information including:
         - Functions and their signatures
         - Classes and their methods
         - Import dependencies
         - Code metrics and analysis results
-        
+
         Args:
             query: SQL-like query string to execute against the code database
-            
+
         Returns:
             Dictionary containing query results
         """
-        logger.info(f'Query code database: {query}')
-        
+        logger.info(f"Query code database: {query}")
+
         # Parse the query to determine what type of data to return
         query_lower = query.lower()
-        
-        if 'functions' in query_lower:
+
+        if "functions" in query_lower:
             # Return dummy function data
             dummy_functions = [
                 {
@@ -517,7 +529,7 @@ def serve(host, port, transport):  # noqa: PLR0915
                     "return_type": "AgentQueryResponse",
                     "complexity": 5,
                     "is_async": True,
-                    "is_public": True
+                    "is_public": True,
                 },
                 {
                     "id": 2,
@@ -528,21 +540,21 @@ def serve(host, port, transport):  # noqa: PLR0915
                     "return_type": "List[AgentStatusResponse]",
                     "complexity": 3,
                     "is_async": True,
-                    "is_public": True
-                }
+                    "is_public": True,
+                },
             ]
-            
+
             # Filter based on query parameters
-            if 'async' in query_lower:
-                result_functions = [f for f in dummy_functions if f['is_async']]
-            elif 'public' in query_lower:
-                result_functions = [f for f in dummy_functions if f['is_public']]
+            if "async" in query_lower:
+                result_functions = [f for f in dummy_functions if f["is_async"]]
+            elif "public" in query_lower:
+                result_functions = [f for f in dummy_functions if f["is_public"]]
             else:
                 result_functions = dummy_functions
-                
-            return {'results': result_functions}
-            
-        elif 'classes' in query_lower:
+
+            return {"results": result_functions}
+
+        elif "classes" in query_lower:
             # Return dummy class data
             dummy_classes = [
                 {
@@ -550,9 +562,13 @@ def serve(host, port, transport):  # noqa: PLR0915
                     "name": "AgentService",
                     "file_path": "backend/app/services/agent_service.py",
                     "line_number": 15,
-                    "methods": ["query_agent", "get_agent_status", "clear_agent_context"],
+                    "methods": [
+                        "query_agent",
+                        "get_agent_status",
+                        "clear_agent_context",
+                    ],
                     "is_abstract": False,
-                    "inheritance": ["object"]
+                    "inheritance": ["object"],
                 },
                 {
                     "id": 2,
@@ -561,13 +577,13 @@ def serve(host, port, transport):  # noqa: PLR0915
                     "line_number": 25,
                     "methods": ["stream", "generate_summary", "clear_state"],
                     "is_abstract": False,
-                    "inheritance": ["BaseAgent"]
-                }
+                    "inheritance": ["BaseAgent"],
+                },
             ]
-            
-            return {'results': dummy_classes}
-            
-        elif 'imports' in query_lower:
+
+            return {"results": dummy_classes}
+
+        elif "imports" in query_lower:
             # Return dummy import data
             dummy_imports = [
                 {
@@ -576,7 +592,7 @@ def serve(host, port, transport):  # noqa: PLR0915
                     "imported_items": ["APIRouter", "HTTPException", "Depends"],
                     "file_path": "backend/app/api/routes/agents.py",
                     "line_number": 1,
-                    "is_standard_library": False
+                    "is_standard_library": False,
                 },
                 {
                     "id": 2,
@@ -584,16 +600,105 @@ def serve(host, port, transport):  # noqa: PLR0915
                     "imported_items": ["Any", "Dict", "List", "Optional"],
                     "file_path": "backend/app/services/agent_service.py",
                     "line_number": 5,
-                    "is_standard_library": True
-                }
+                    "is_standard_library": True,
+                },
             ]
-            
-            return {'results': dummy_imports}
-        
-        # Default empty result
-        return {'results': []}
 
-    @mcp.resource('resource://agent_cards/list', mime_type='application/json')
+            return {"results": dummy_imports}
+
+        # Default empty result
+        return json.dumps({"results": []})
+        return {"results": []}
+
+    @mcp.tool()
+    def get_embeddings(text: str) -> dict:
+        """Generate embeddings using Google Generative AI"""
+        return genai.embed_content(
+            model=MODEL,
+            content=text,
+            task_type="retrieval_document",
+        )["embedding"]
+
+    @mcp.tool()
+    def download_repo_as_zip(github_url: str) -> zipfile.ZipFile:
+        """Download GitHub repo as a ZIP archive"""
+
+        owner_repo = github_url.rstrip("/").split("github.com/")[-1]
+        zip_url = f"https://github.com/{owner_repo}/archive/refs/heads/master.zip"
+        response = requests.get(zip_url)
+        if response.status_code != 200:
+            # fallback to main branch
+            zip_url = f"https://github.com/{owner_repo}/archive/refs/heads/main.zip"
+            response = requests.get(zip_url)
+            if response.status_code != 200:
+                raise Exception("Could not download repository ZIP.")
+        return zipfile.ZipFile(io.BytesIO(response.content))
+
+    @mcp.tool()
+    def save_repo_to_vector_db(zip_file: zipfile.ZipFile) -> str:
+        """Save repository content to a vector database."""
+        try:
+            conn = psycopg2.connect(
+                dbname=mcp_settings.DB_NAME,
+                user=mcp_settings.DB_USER,
+                password=mcp_settings.DB_PASSWORD,
+                host=mcp_settings.DB_HOST,
+                port=mcp_settings.DB_PORT,
+                sslmode=mcp_settings.DB_SSLMODE,
+            )
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS REPO_EMBEDDINGS (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    file_name TEXT,
+                    content TEXT,
+                    embedding BLOB
+                )
+                """
+            )
+
+            for file_info in zip_file.infolist():
+                if not file_info.is_dir() and file_info.filename.endswith(".py"):
+                    with zip_file.open(file_info) as f:
+                        content = f.read().decode("utf-8")
+                        embedding = generate_embeddings(content)
+                        cursor.execute(
+                            "INSERT INTO repo_files (file_name, content, embedding) VALUES (?, ?, ?)",
+                            (file_info.filename, content, json.dumps(embedding)),
+                        )
+
+            conn.commit()
+            conn.close()
+            return "Repository saved to vector database successfully."
+        except Exception as e:
+            logger.error(f"Error saving repo to vector DB: {e}")
+            return f"Error saving repo to vector DB: {e}"
+
+    @mcp.tool()
+    def extract_text_files(zip_file: zipfile.ZipFile) -> dict:
+        """Extract text/code files from the ZIP and return as {filename: content}"""
+        file_contents = {}
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            zip_file.extractall(tmpdirname)
+            for root, _, files in os.walk(tmpdirname):
+                for file in files:
+                    ext = os.path.splitext(file)[1]
+                    if ext in ALLOWED_EXTENSIONS:
+                        file_path = os.path.join(root, file)
+                        try:
+                            with open(file_path, encoding="utf-8") as f:
+                                content = f.read()
+                                if content.strip():  # Skip empty files
+                                    relative_path = os.path.relpath(
+                                        file_path, tmpdirname
+                                    )
+                                    file_contents[relative_path] = content
+                        except Exception:
+                            pass  # Skip unreadable files
+        return file_contents
+
+    @mcp.resource("resource://agent_cards/list", mime_type="application/json")
     def get_agent_cards() -> dict:
         """Retrieves all loaded agent cards as a json / dictionary for the MCP resource endpoint.
 
@@ -606,13 +711,11 @@ def serve(host, port, transport):  # noqa: PLR0915
             {'agent_cards': []} if the data cannot be retrieved.
         """
         resources = {}
-        logger.info('Starting read resources')
-        resources['agent_cards'] = df['card_uri'].to_list()
+        logger.info("Starting read resources")
+        resources["agent_cards"] = df["card_uri"].to_list()
         return resources
 
-    @mcp.resource(
-        'resource://agent_cards/{card_name}', mime_type='application/json'
-    )
+    @mcp.resource("resource://agent_cards/{card_name}", mime_type="application/json")
     def get_agent_card(card_name: str) -> dict:
         """Retrieves an agent card as a json / dictionary for the MCP resource endpoint.
 
@@ -623,19 +726,15 @@ def serve(host, port, transport):  # noqa: PLR0915
             A json / dictionary
         """
         resources = {}
-        logger.info(
-            f'Starting read resource resource://agent_cards/{card_name}'
-        )
-        resources['agent_card'] = (
+        logger.info(f"Starting read resource resource://agent_cards/{card_name}")
+        resources["agent_card"] = (
             df.loc[
-                df['card_uri'] == f'resource://agent_cards/{card_name}',
-                'agent_card',
+                df["card_uri"] == f"resource://agent_cards/{card_name}",
+                "agent_card",
             ]
         ).to_list()
 
         return resources
 
-    logger.info(
-        f'Agent cards MCP Server at {host}:{port} and transport {transport}'
-    )
+    logger.info(f"Agent cards MCP Server at {host}:{port} and transport {transport}")
     mcp.run(transport=transport)

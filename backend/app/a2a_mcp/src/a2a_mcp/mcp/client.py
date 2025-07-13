@@ -18,7 +18,7 @@ from mcp.types import CallToolResult, ReadResourceResult
 logger = get_logger(__name__)
 
 env = {
-    'GOOGLE_API_KEY': settings.GOOGLE_API_KEY,
+    "GOOGLE_API_KEY": settings.GOOGLE_API_KEY,
 }
 
 
@@ -45,23 +45,23 @@ async def init_session(host, port, transport):
         Exception: Other potential exceptions during client initialization or
                    session setup.
     """
-    if transport == 'sse':
-        url = f'http://{host}:{port}/sse'
+    if transport == "sse":
+        url = f"http://{host}:{port}/sse"
         async with sse_client(url) as (read_stream, write_stream):
             async with ClientSession(
                 read_stream=read_stream, write_stream=write_stream
             ) as session:
-                logger.debug('SSE ClientSession created, initializing...')
+                logger.debug("SSE ClientSession created, initializing...")
                 await session.initialize()
-                logger.info('SSE ClientSession initialized successfully.')
+                logger.info("SSE ClientSession initialized successfully.")
                 yield session
-    elif transport == 'stdio':
+    elif transport == "stdio":
         if not settings.GOOGLE_API_KEY:
-            logger.error('GOOGLE_API_KEY is not set')
-            raise ValueError('GOOGLE_API_KEY is not set')
+            logger.error("GOOGLE_API_KEY is not set")
+            raise ValueError("GOOGLE_API_KEY is not set")
         stdio_params = StdioServerParameters(
-            command='uv',
-            args=['run', 'a2a-mcp'],
+            command="uv",
+            args=["run", "a2a-mcp"],
             env=env,
         )
         async with stdio_client(stdio_params) as (read_stream, write_stream):
@@ -69,12 +69,12 @@ async def init_session(host, port, transport):
                 read_stream=read_stream,
                 write_stream=write_stream,
             ) as session:
-                logger.debug('STDIO ClientSession created, initializing...')
+                logger.debug("STDIO ClientSession created, initializing...")
                 await session.initialize()
-                logger.info('STDIO ClientSession initialized successfully.')
+                logger.info("STDIO ClientSession initialized successfully.")
                 yield session
     else:
-        logger.error(f'Unsupported transport type: {transport}')
+        logger.error(f"Unsupported transport type: {transport}")
         raise ValueError(
             f"Unsupported transport type: {transport}. Must be 'sse' or 'stdio'."
         )
@@ -92,9 +92,9 @@ async def find_agent(session: ClientSession, query) -> CallToolResult:
     """
     logger.info(f"Calling 'find_agent' tool with query: '{query[:50]}...'")
     return await session.call_tool(
-        name='find_agent',
+        name="find_agent",
         arguments={
-            'query': query,
+            "query": query,
         },
     )
 
@@ -109,11 +109,16 @@ async def find_resource(session: ClientSession, resource) -> ReadResourceResult:
     Returns:
         The result of the resource read operation.
     """
-    logger.info(f'Reading resource: {resource}')
+    logger.info(f"Reading resource: {resource}")
     return await session.read_resource(resource)
 
 
-async def semantic_code_search(session: ClientSession, query: str, file_pattern: str = "*", language: str = "python") -> CallToolResult:
+async def semantic_code_search(
+    session: ClientSession,
+    query: str,
+    file_pattern: str = "*",
+    language: str = "python",
+) -> CallToolResult:
     """Calls the 'semantic_code_search' tool on the connected MCP server.
 
     Args:
@@ -127,16 +132,18 @@ async def semantic_code_search(session: ClientSession, query: str, file_pattern:
     """
     logger.info(f"Calling 'semantic_code_search' tool with query: '{query}'")
     return await session.call_tool(
-        name='semantic_code_search',
+        name="semantic_code_search",
         arguments={
-            'query': query,
-            'file_pattern': file_pattern,
-            'language': language,
+            "query": query,
+            "file_pattern": file_pattern,
+            "language": language,
         },
     )
 
 
-async def analyze_code_quality(session: ClientSession, file_path: str, analysis_type: str = "comprehensive") -> CallToolResult:
+async def analyze_code_quality(
+    session: ClientSession, file_path: str, analysis_type: str = "comprehensive"
+) -> CallToolResult:
     """Calls the 'analyze_code_quality' tool on the connected MCP server.
 
     Args:
@@ -149,15 +156,20 @@ async def analyze_code_quality(session: ClientSession, file_path: str, analysis_
     """
     logger.info(f"Calling 'analyze_code_quality' tool for file: '{file_path}'")
     return await session.call_tool(
-        name='analyze_code_quality',
+        name="analyze_code_quality",
         arguments={
-            'file_path': file_path,
-            'analysis_type': analysis_type,
+            "file_path": file_path,
+            "analysis_type": analysis_type,
         },
     )
 
 
-async def generate_documentation(session: ClientSession, file_path: str, doc_type: str = "docstrings", style: str = "google") -> CallToolResult:
+async def generate_documentation(
+    session: ClientSession,
+    file_path: str,
+    doc_type: str = "docstrings",
+    style: str = "google",
+) -> CallToolResult:
     """Calls the 'generate_documentation' tool on the connected MCP server.
 
     Args:
@@ -171,16 +183,21 @@ async def generate_documentation(session: ClientSession, file_path: str, doc_typ
     """
     logger.info(f"Calling 'generate_documentation' tool for file: '{file_path}'")
     return await session.call_tool(
-        name='generate_documentation',
+        name="generate_documentation",
         arguments={
-            'file_path': file_path,
-            'doc_type': doc_type,
-            'style': style,
+            "file_path": file_path,
+            "doc_type": doc_type,
+            "style": style,
         },
     )
 
 
-async def search_code_patterns(session: ClientSession, pattern: str, file_extensions: list = None, exclude_dirs: list = None) -> CallToolResult:
+async def search_code_patterns(
+    session: ClientSession,
+    pattern: str,
+    file_extensions: list = None,
+    exclude_dirs: list = None,
+) -> CallToolResult:
     """Calls the 'search_code_patterns' tool on the connected MCP server.
 
     Args:
@@ -194,11 +211,11 @@ async def search_code_patterns(session: ClientSession, pattern: str, file_extens
     """
     logger.info(f"Calling 'search_code_patterns' tool with pattern: '{pattern}'")
     return await session.call_tool(
-        name='search_code_patterns',
+        name="search_code_patterns",
         arguments={
-            'pattern': pattern,
-            'file_extensions': file_extensions,
-            'exclude_dirs': exclude_dirs,
+            "pattern": pattern,
+            "file_extensions": file_extensions,
+            "exclude_dirs": exclude_dirs,
         },
     )
 
@@ -215,9 +232,9 @@ async def query_code_database(session: ClientSession, query: str) -> CallToolRes
     """
     logger.info(f"Calling 'query_code_database' tool with query: '{query}'")
     return await session.call_tool(
-        name='query_code_database',
+        name="query_code_database",
         arguments={
-            'query': query,
+            "query": query,
         },
     )
 
@@ -236,7 +253,7 @@ async def main(host, port, transport, query, resource, tool):
         resource: Optional resource URI to read.
         tool: Optional tool name to test.
     """
-    logger.info('Starting Client to connect to MCP')
+    logger.info("Starting Client to connect to MCP")
     async with init_session(host, port, transport) as session:
         if query:
             result = await find_agent(session, query)
@@ -248,40 +265,53 @@ async def main(host, port, transport, query, resource, tool):
             data = json.loads(result.contents[0].text)
             logger.info(json.dumps(data, indent=2))
         if tool:
-            if tool == 'semantic_code_search':
-                result = await semantic_code_search(session, 'find authentication functions', '*', 'python')
+            if tool == "semantic_code_search":
+                result = await semantic_code_search(
+                    session, "find authentication functions", "*", "python"
+                )
                 data = json.loads(result.content[0].text)
                 logger.info(json.dumps(data, indent=2))
-            elif tool == 'analyze_code_quality':
-                result = await analyze_code_quality(session, 'backend/app/api/routes/agents.py', 'comprehensive')
+            elif tool == "analyze_code_quality":
+                result = await analyze_code_quality(
+                    session, "backend/app/api/routes/agents.py", "comprehensive"
+                )
                 data = json.loads(result.content[0].text)
                 logger.info(json.dumps(data, indent=2))
-            elif tool == 'generate_documentation':
-                result = await generate_documentation(session, 'backend/app/api/routes/agents.py', 'docstrings', 'google')
+            elif tool == "generate_documentation":
+                result = await generate_documentation(
+                    session, "backend/app/api/routes/agents.py", "docstrings", "google"
+                )
                 data = json.loads(result.content[0].text)
                 logger.info(json.dumps(data, indent=2))
-            elif tool == 'search_code_patterns':
-                result = await search_code_patterns(session, 'async def', ['.py'], ['__pycache__'])
+            elif tool == "search_code_patterns":
+                result = await search_code_patterns(
+                    session, "async def", [".py"], ["__pycache__"]
+                )
                 data = json.loads(result.content[0].text)
                 logger.info(json.dumps(data, indent=2))
-            elif tool == 'query_code_database':
-                result = await query_code_database(session, 'SELECT * FROM functions WHERE is_async = true')
+            elif tool == "query_code_database":
+                result = await query_code_database(
+                    session, "SELECT * FROM functions WHERE is_async = true"
+                )
                 data = json.loads(result.content[0].text)
                 logger.info(json.dumps(data, indent=2))
 
 
 # Command line tester
 @click.command()
-@click.option('--host', default='localhost', help='SSE Host')
-@click.option('--port', default='10100', help='SSE Port')
-@click.option('--transport', default='stdio', help='MCP Transport')
-@click.option('--find_agent', help='Query to find an agent')
-@click.option('--resource', help='URI of the resource to locate')
-@click.option('--tool', help='Name of the tool to test (semantic_code_search, analyze_code_quality, generate_documentation, search_code_patterns, query_code_database)')
+@click.option("--host", default="localhost", help="SSE Host")
+@click.option("--port", default="10100", help="SSE Port")
+@click.option("--transport", default="stdio", help="MCP Transport")
+@click.option("--find_agent", help="Query to find an agent")
+@click.option("--resource", help="URI of the resource to locate")
+@click.option(
+    "--tool",
+    help="Name of the tool to test (semantic_code_search, analyze_code_quality, generate_documentation, search_code_patterns, query_code_database)",
+)
 def cli(host, port, transport, find_agent, resource, tool):
     """A command-line client to interact with the Agent Cards MCP server."""
     asyncio.run(main(host, port, transport, find_agent, resource, tool))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     cli()
