@@ -25,6 +25,7 @@ class MCPServerSettings(BaseSettings):
 
     # Google API Key for AI services
     GOOGLE_API_KEY: str
+    # Database configuration
     DB_NAME: str
     DB_USER: str
     DB_PASSWORD: str
