@@ -6,8 +6,10 @@ This is a standalone configuration separate from the main app.
 
 import os
 from pathlib import Path
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_core import MultiHostUrl
+from pydantic import PostgresDsn
 
 
 class MCPServerSettings(BaseSettings):
@@ -25,13 +27,26 @@ class MCPServerSettings(BaseSettings):
 
     # Google API Key for AI services
     GOOGLE_API_KEY: str
-    # Database configuration
-    DB_NAME: str
-    DB_USER: str
-    DB_PASSWORD: str
-    DB_HOST: str
-    DB_PORT: str
-    DB_SSLMODE: str
+    
+    # Database configuration for PostgreSQL
+    POSTGRES_SERVER: str = "localhost"
+    POSTGRES_PORT: int = 5432
+    POSTGRES_USER: str
+    POSTGRES_PASSWORD: str
+    POSTGRES_DB: str
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def DATABASE_URI(self) -> PostgresDsn:
+        """Build the database URI for SQLAlchemy."""
+        return MultiHostUrl.build(
+            scheme="postgresql+psycopg",
+            username=self.POSTGRES_USER,
+            password=self.POSTGRES_PASSWORD,
+            host=self.POSTGRES_SERVER,
+            port=self.POSTGRES_PORT,
+            path=self.POSTGRES_DB,
+        )
 
     # Optional: Google Places API Key
     GOOGLE_PLACES_API_KEY: str = ""

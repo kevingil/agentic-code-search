@@ -22,6 +22,7 @@
   - [Example Flow: Travel Agent](#example-flow-travel-agent)
   - [Steps to execute the example](#steps-to-execute-the-example)
     - [File/Directory Descriptions](#filedirectory-descriptions)
+  - [Vector Search Tools](#vector-search-tools)
 
 ## Objective
 
@@ -263,3 +264,53 @@ Important: The sample code provided is for demonstration purposes and illustrate
 All data received from an external agent—including but not limited to its AgentCard, messages, artifacts, and task statuses—should be handled as untrusted input. For example, a malicious agent could provide an AgentCard containing crafted data in its fields (e.g., description, name, skills.description). If this data is used without sanitization to construct prompts for a Large Language Model (LLM), it could expose your application to prompt injection attacks.  Failure to properly validate and sanitize this data before use can introduce security vulnerabilities into your application.
 
 Developers are responsible for implementing appropriate security measures, such as input validation and secure handling of credentials to protect their systems and users.
+
+## Vector Search Tools
+
+The MCP server now includes powerful vector search tools for performing semantic code search on processed repository embeddings. These tools enable natural language queries to find relevant code snippets across processed repositories.
+
+### Available Vector Search Tools
+
+1. **`vector_search_code`** - Search for similar code chunks using natural language queries
+2. **`list_code_sessions`** - List all sessions with processed embeddings
+3. **`get_session_files`** - Get file information for a specific session
+4. **`search_code_by_file_path`** - Search code by file path patterns
+5. **`generate_query_embedding`** - Generate embeddings for debugging
+
+### Prerequisites
+
+1. **Database Configuration**: Configure PostgreSQL connection in your `.env` file:
+   ```env
+   POSTGRES_SERVER=localhost
+   POSTGRES_PORT=5432
+   POSTGRES_USER=your_db_user
+   POSTGRES_PASSWORD=your_db_password
+   POSTGRES_DB=your_db_name
+   GOOGLE_API_KEY=your_google_api_key
+   ```
+
+2. **Processed Embeddings**: Repositories must be processed by the main application's embedding service.
+
+### Example Usage
+
+```json
+{
+  "tool": "vector_search_code",
+  "parameters": {
+    "query": "user authentication and login validation",
+    "limit": 10,
+    "similarity_threshold": 0.75
+  }
+}
+```
+
+### Testing
+
+Run the test script to verify the vector search functionality:
+
+```bash
+cd backend/app/a2a_mcp
+python test_vector_search.py
+```
+
+For detailed documentation, see [VECTOR_SEARCH_TOOLS.md](VECTOR_SEARCH_TOOLS.md).
