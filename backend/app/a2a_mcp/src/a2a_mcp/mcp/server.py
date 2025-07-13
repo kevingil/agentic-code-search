@@ -639,17 +639,17 @@ def serve(host, port, transport):  # noqa: PLR0915
         """Save repository content to a vector database."""
         try:
             conn = psycopg2.connect(
-                dbname="your_db_name",
-                user="your_user",
-                password="your_password",
-                host="your-db-name.internal",
-                port=5432,
-                sslmode="require",
+                dbname=mcp_settings.DB_NAME,
+                user=mcp_settings.DB_USER,
+                password=mcp_settings.DB_PASSWORD,
+                host=mcp_settings.DB_HOST,
+                port=mcp_settings.DB_PORT,
+                sslmode=mcp_settings.DB_SSLMODE,
             )
             cursor = conn.cursor()
             cursor.execute(
                 """
-                CREATE TABLE IF NOT EXISTS repo_files (
+                CREATE TABLE IF NOT EXISTS REPO_EMBEDDINGS (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     file_name TEXT,
                     content TEXT,
@@ -676,7 +676,7 @@ def serve(host, port, transport):  # noqa: PLR0915
             return f"Error saving repo to vector DB: {e}"
 
     @mcp.tool()
-    def extract_text_files(zip_file: zipfile.ZipFile):
+    def extract_text_files(zip_file: zipfile.ZipFile) -> dict:
         """Extract text/code files from the ZIP and return as {filename: content}"""
         file_contents = {}
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -687,7 +687,7 @@ def serve(host, port, transport):  # noqa: PLR0915
                     if ext in ALLOWED_EXTENSIONS:
                         file_path = os.path.join(root, file)
                         try:
-                            with open(file_path, "r", encoding="utf-8") as f:
+                            with open(file_path, encoding="utf-8") as f:
                                 content = f.read()
                                 if content.strip():  # Skip empty files
                                     relative_path = os.path.relpath(
