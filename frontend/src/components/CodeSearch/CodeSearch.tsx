@@ -489,125 +489,122 @@ function CodeSearch() {
 
       <Container maxW="6xl" py={8}>
         <VStack gap={8} align="stretch">
-          {/* Header */}
-          <Box textAlign="center" mb={8}>
-            <VStack gap={4} align="center">
-              <Image src={Logo} alt="Code Search Logo" h="200px" />
-              <Heading size="xl" color="#33025b">
-                Agentic Code Search
-              </Heading>
-              <Text fontSize="lg" color="gray.600">
-                Ask questions about your codebase and let our AI agent find the answers
-              </Text>
-            </VStack>
-          </Box>
-
           {/* Repo Picker - shown when no session is active */}
           {!currentSession && (
-            <VStack gap={6} align="stretch">
-              <Box textAlign="center">
-                <Heading size="lg" mb={4}>
-                  Choose a Repository
-                </Heading>
-                <Text color="gray.600" mb={6}>
-                  Connect a GitHub repository to start analyzing your code
-                </Text>
-              </Box>
+            <Box maxW="2xl" mx="auto" minH="70vh" display="flex" flexDirection="column">
+              <VStack gap={4} align="stretch" flex={1}>
+                {/* Combined Header + GitHub Repository Option */}
+                <Box borderRadius="lg" p={6} bg="white">
+                  <VStack gap={4} align="stretch">
+                    {/* Header Section */}
+                    <VStack gap={3} align="center" mb={2}>
+                      <Image src={Logo} alt="Code Search Logo" h="120px" />
+                      <Heading size="lg" color="#33025b">
+                        Agentic Code Search
+                      </Heading>
+                      <Text fontSize="md" color="gray.600" textAlign="center">
+                        Ask questions about your codebase and let our AI agent find the answers
+                      </Text>
+                    </VStack>
+                    
+                    {/* GitHub Repository Form */}
+                    <Box pt={4} borderTop="1px" borderColor="gray.100">
+                      <Text fontSize="sm" color="gray.600" textAlign="center" mb={4}>
+                        Connect a GitHub repository to start analyzing your code
+                      </Text>
+                      
+                      <HStack>
+                        <Input
+                          placeholder="https://github.com/username/repository"
+                          value={githubUrl}
+                          onChange={handleUrlChange}
+                          onKeyPress={handleUrlKeyPress}
+                          size="lg"
+                          flex={1}
+                          borderColor={urlError ? "red.300" : "gray.200"}
+                        />
+                      </HStack>
+                      
+                      {urlError && (
+                        <Box bg="red.50" p={3} rounded="md" border="1px" borderColor="red.200" mt={3}>
+                          <Text color="red.600" fontSize="sm">{urlError}</Text>
+                        </Box>
+                      )}
 
-              {/* GitHub URL Input */}
-              <Box border="1px" borderColor="gray.200" borderRadius="md" p={6}>
-                <VStack gap={4} align="stretch">
-                  <Box>
-                    <Text fontWeight="medium" mb={2}>
-                      GitHub Repository URL
-                    </Text>
-                    <HStack>
-                      <FiGithub color="gray.500" />
-                      <Input
-                        placeholder="https://github.com/username/repository"
-                        value={githubUrl}
-                        onChange={handleUrlChange}
-                        onKeyPress={handleUrlKeyPress}
+                      <Button
+                        onClick={handleCreateSession}
+                        disabled={!githubUrl.trim() || isCreatingSession}
+                        colorScheme="blue"
                         size="lg"
-                        flex={1}
-                        borderColor={urlError ? "red.300" : "gray.200"}
-                      />
-                    </HStack>
-                    {urlError && (
-                      <Box bg="red.50" p={3} rounded="md" border="1px" borderColor="red.200" mt={2}>
-                        <Text color="red.600" fontSize="sm">{urlError}</Text>
-                      </Box>
-                    )}
-                  </Box>
+                        w="full"
+                        mt={4}
+                      >
+                        <FiPlus />
+                        {isCreatingSession ? "Creating..." : "Analyze Repository"}
+                      </Button>
+                    </Box>
+                  </VStack>
+                </Box>
 
-                  <Button
-                    onClick={handleCreateSession}
-                    disabled={!githubUrl.trim() || isCreatingSession}
-                    colorScheme="blue"
-                    size="lg"
-                  >
-                    <FiPlus />
-                    {isCreatingSession ? "Creating session..." : "Analyze Repository"}
-                  </Button>
-                </VStack>
-              </Box>
-
-              {/* Or Separator */}
-              <HStack>
-                <Box flex={1} h="1px" bg="gray.200" />
-                <Text color="gray.500" fontSize="sm">
-                  OR
-                </Text>
-                <Box flex={1} h="1px" bg="gray.200" />
-              </HStack>
-
-              {/* Quick Start Option */}
-              <Box border="1px" borderColor="gray.200" borderRadius="md" p={6}>
-                <VStack gap={4} align="stretch">
-                  <Box textAlign="center">
-                    <Text fontWeight="medium" mb={2}>
-                      Start Without Repository
-                    </Text>
-                    <Text fontSize="sm" color="gray.600" mb={4}>
-                      Begin a general conversation without connecting to a specific repository
-                    </Text>
-                  </Box>
-                  <Button
-                    onClick={handleCreateQuickSession}
-                    variant="outline"
-                    size="lg"
-                  >
-                    <FiMessageSquare />
-                    Start General Session
-                  </Button>
-                </VStack>
-              </Box>
-
-              {/* Popular Repositories Examples */}
-              <Box textAlign="center" mt={6}>
-                <Text fontSize="sm" color="gray.500" mb={3}>
-                  Try these popular repositories:
-                </Text>
-                <HStack justify="center" gap={4} flexWrap="wrap">
-                  {[
-                    "facebook/react",
-                    "microsoft/vscode",
-                    "vercel/next.js",
-                    "nodejs/node"
-                  ].map(repo => (
+                {/* General Session Option - Secondary */}
+                <Box border="1px" borderColor="gray.200" borderRadius="lg" p={4} bg="white" shadow="sm">
+                  <HStack gap={4} align="center">
+                    <Box p={2} bg="purple.50" borderRadius="full">
+                      <FiMessageSquare size={20} color="#805AD5" />
+                    </Box>
+                    <VStack align="start" flex={1} gap={1}>
+                      <Text fontWeight="semibold" fontSize="md">
+                        General Session
+                      </Text>
+                      <Text fontSize="sm" color="gray.600">
+                        Start a conversation without connecting to a specific repository
+                      </Text>
+                    </VStack>
                     <Button
-                      key={repo}
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setGithubUrl(`https://github.com/${repo}`)}
+                      onClick={handleCreateQuickSession}
+                      variant="outline"
+                      colorScheme="purple"
+                      size="md"
                     >
-                      <FiGithub />
-                      {repo}
+                      <FiMessageSquare />
+                      Start Session
                     </Button>
-                  ))}
-                </HStack>
-              </Box>
-            </VStack>
+                  </HStack>
+                </Box>
+
+                {/* Spacer to push footer to bottom */}
+                <Box flex={1} />
+
+                {/* Popular Repositories - Footer */}
+                <Box p={4} mt={4}>
+                  <Text fontSize="sm" color="gray.600" mb={3} textAlign="center">
+                    Or try these popular repositories:
+                  </Text>
+                  <HStack justify="center" gap={2} flexWrap="wrap">
+                    {[
+                      "facebook/react",
+                      "microsoft/vscode",
+                      "vercel/next.js",
+                      "nodejs/node"
+                    ].map(repo => (
+                      <Button
+                        key={repo}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setGithubUrl(`https://github.com/${repo}`)}
+                        bg="white"
+                        borderRadius="2xl"
+                        borderColor="gray.200"
+                        _hover={{ bg: "blue.50", borderColor: "blue.300" }}
+                      >
+                        <FiGithub size={14} />
+                        {repo}
+                      </Button>
+                    ))}
+                  </HStack>
+                </Box>
+              </VStack>
+            </Box>
           )}
 
           {/* Conversation History */}

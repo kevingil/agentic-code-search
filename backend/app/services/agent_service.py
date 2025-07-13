@@ -35,6 +35,7 @@ class AgentService:
     def _initialize_configs(self):
         """Initialize agent configurations"""
         self.agent_configs = {
+            # We can get these from the agent cards
             "orchestrator": AgentConfig(
                 agent_type="orchestrator",
                 agent_name="Orchestrator Agent",
