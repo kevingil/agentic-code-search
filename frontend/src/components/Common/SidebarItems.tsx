@@ -253,18 +253,21 @@ function SessionItem({
       borderColor="gray.100"
     >
       <VStack align="start" gap={1} flex={1} minW={0}>
+        <HStack justify="space-between" w="100%">
         <Text fontSize="sm" fontWeight="medium" truncate>
           {session.name}
         </Text>
+        <Text fontSize="xs" color="gray.500">
+            {formatRelativeTime(session.last_used)}
+          </Text>
+        </HStack>
         
         <HStack gap={2} wrap="wrap">
           <Text fontSize="xs" color="gray.500">
             {session.messages?.length || 0} messages
           </Text>
           
-          <Text fontSize="xs" color="gray.500">
-            {formatRelativeTime(session.last_used)}
-          </Text>
+          
           
           {session.github_url && (
             <HStack gap={1}>
@@ -275,7 +278,10 @@ function SessionItem({
             </HStack>
           )}
           
-          {session.github_url && embeddingsStatus && (
+          
+        </HStack>
+
+        {session.github_url && embeddingsStatus && (
             <HStack gap={1}>
               <Icon as={FiDatabase} boxSize={3} color="gray.500" />
               <Text fontSize="xs" color="gray.500">
@@ -289,7 +295,7 @@ function SessionItem({
               </Badge>
             </HStack>
           )}
-        </HStack>
+
       </VStack>
       
       <HStack>
