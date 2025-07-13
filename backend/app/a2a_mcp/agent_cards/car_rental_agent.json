@@ -1,6 +1,6 @@
 {
-    "name": "Code Documentation Agent",
-    "description": "Generates and analyzes code documentation and comments",
+    "name": "code_documentation_agent",
+    "description": "Generates comprehensive documentation for code including docstrings, API docs, README files, and analyzes existing documentation",
     "url": "http://localhost:10105/",
     "provider": null,
     "version": "1.0.0",
@@ -22,25 +22,103 @@
     ],
     "defaultOutputModes": [
         "text",
-        "text/plain"
+        "text/plain",
+        "application/json"
     ],
     "skills": [
         {
             "id": "code_documentation",
             "name": "Code Documentation Generation",
-            "description": "Generates comprehensive documentation, docstrings, and comments for code files and functions",
+            "description": "Generates comprehensive documentation, docstrings, and comments for code files, functions, classes, and modules",
             "tags": [
                 "documentation",
                 "docstrings",
-                "code comments"
+                "code comments",
+                "function documentation",
+                "class documentation"
             ],
             "examples": [
                 "Generate comprehensive API documentation",
                 "Create docstrings for Python functions",
-                "Analyze and improve existing code comments"
+                "Analyze and improve existing code comments",
+                "Generate module-level documentation",
+                "Create comprehensive class documentation",
+                "Add missing docstrings to API endpoints"
             ],
-            "inputModes": null,
-            "outputModes": null
+            "inputModes": ["text"],
+            "outputModes": ["text", "application/json"]
+        },
+        {
+            "id": "api_documentation",
+            "name": "API Documentation",
+            "description": "Generate API documentation including endpoints, parameters, response formats, and usage examples",
+            "tags": [
+                "API documentation",
+                "endpoint documentation", 
+                "OpenAPI specs",
+                "REST API docs",
+                "parameter documentation"
+            ],
+            "examples": [
+                "Generate OpenAPI specification for REST endpoints",
+                "Document API parameters and response formats",
+                "Create comprehensive API reference",
+                "Generate endpoint usage examples",
+                "Document authentication requirements"
+            ],
+            "inputModes": ["text"],
+            "outputModes": ["text", "application/json"]
+        },
+        {
+            "id": "readme_generation",
+            "name": "README Generation",
+            "description": "Generate comprehensive README files and project documentation including setup instructions and usage examples",
+            "tags": [
+                "README generation",
+                "project documentation",
+                "setup instructions",
+                "usage examples",
+                "installation guides"
+            ],
+            "examples": [
+                "Generate a comprehensive README for the project",
+                "Create installation and setup instructions",
+                "Document project structure and architecture",
+                "Generate usage examples and tutorials",
+                "Create contributing guidelines"
+            ],
+            "inputModes": ["text"],
+            "outputModes": ["text", "application/json"]
+        },
+        {
+            "id": "documentation_analysis",
+            "name": "Documentation Analysis",
+            "description": "Analyze existing documentation for completeness, quality, and identify gaps or outdated content",
+            "tags": [
+                "documentation analysis",
+                "coverage assessment",
+                "quality evaluation", 
+                "gap identification",
+                "consistency check"
+            ],
+            "examples": [
+                "Analyze documentation coverage for the codebase",
+                "Identify missing or outdated documentation",
+                "Evaluate documentation quality and consistency",
+                "Find undocumented functions and classes",
+                "Check documentation accuracy against code"
+            ],
+            "inputModes": ["text"],
+            "outputModes": ["text", "application/json"]
         }
-    ]
+    ],
+    "mcp_tools": [
+        "generate_documentation",
+        "vector_search_code",
+        "search_code_by_file_path",
+        "query_code_database",
+        "list_code_sessions", 
+        "get_session_files"
+    ],
+    "mcp_server": "http://localhost:10100/"
 }

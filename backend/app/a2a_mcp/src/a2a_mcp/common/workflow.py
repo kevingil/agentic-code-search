@@ -57,6 +57,7 @@ class WorkflowNode:
         self.task = task
         self.results = None
         self.state = Status.READY
+        self.attributes = {}
 
     async def get_planner_resource(self) -> AgentCard | None:
         logger.info(f'Getting resource for node {self.id}')
@@ -92,16 +93,28 @@ class WorkflowNode:
         logger.info(f'Find agent for task - {self.task}')
         print(f"DEBUG: Starting find_agent_for_task for task {self.task}")
         
+        # Check if this node has specific agent type attributes and map accordingly
+        agent_type = getattr(self, 'agent_type', None)
+        if hasattr(self, 'attributes') and self.attributes and 'agent_type' in self.attributes:
+            agent_type = self.attributes['agent_type']
+        
+        print(f"DEBUG: Looking for agent with type: {agent_type}")
+        
+        # Create a more specific query that includes the agent type if available
+        query_text = self.task
+        if agent_type:
+            query_text = f"Agent type: {agent_type}. Task: {self.task}"
+        
         try:
             config = get_mcp_server_config()
             print(f"DEBUG: Got config for find_agent: {config}")
             
-            print(f"DEBUG: About to create session for find_agent")
+            print(f"DEBUG: About to create session for find_agent with query: {query_text}")
             async with client.init_session(
                 config.host, config.port, config.transport
             ) as session:
                 print(f"DEBUG: Session created for find_agent, calling find_agent")
-                result = await client.find_agent(session, self.task)
+                result = await client.find_agent(session, query_text)
                 print(f"DEBUG: Got result from find_agent")
                 
                 # Debug the result structure
@@ -294,9 +307,17 @@ class WorkflowGraph:
 
     def set_node_attribute(self, node_id, attribute, value):
         nx.set_node_attributes(self.graph, {node_id: value}, attribute)
+        # Also set on the node object itself
+        if node_id in self.nodes:
+            node_obj = self.nodes[node_id]
+            node_obj.attributes[attribute] = value
 
     def set_node_attributes(self, node_id, attr_val):
         nx.set_node_attributes(self.graph, {node_id: attr_val})
+        # Also set on the node object itself
+        if node_id in self.nodes:
+            node_obj = self.nodes[node_id]
+            node_obj.attributes.update(attr_val)
 
     def is_empty(self) -> bool:
         return self.graph.number_of_nodes() == 0

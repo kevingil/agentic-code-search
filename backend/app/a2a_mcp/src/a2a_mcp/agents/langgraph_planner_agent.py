@@ -47,22 +47,29 @@ DEFAULT ASSUMPTIONS FOR REPOSITORY SEARCH:
 - Analysis type: COMPREHENSIVE (search + analysis + documentation as appropriate)
 - Output format: DETAILED with code snippets and actionable insights
 
-IMMEDIATE PLANNING APPROACH:
-Based on user query, immediately generate tasks from these categories:
-1. Code Search Tasks - semantic search, pattern matching, function finding
-2. Code Analysis Tasks - quality analysis, security analysis, complexity analysis  
-3. Documentation Tasks - generate docs, analyze existing docs, create comments
+AVAILABLE AGENT TYPES AND THEIR CAPABILITIES:
+1. "Code Search Agent" - Semantic code search using vector_search_code, search_code_by_file_path, list_code_sessions tools
+2. "Code Analysis Agent" - Code quality analysis using vector_search_code, analyze_code_quality, search_code_patterns tools  
+3. "Code Documentation Agent" - Documentation generation using generate_documentation, vector_search_code tools
 
-SMART INFERENCE:
-- "what language" query → generate language analysis task
-- "find functions" query → generate semantic search task
-- "code quality" query → generate analysis task
-- "security" query → generate security analysis task
-- "documentation" query → generate documentation task
+IMMEDIATE PLANNING APPROACH:
+Based on user query, immediately generate tasks using these specific agent names in descriptions:
+1. Code Search Tasks - Use "Code Search Agent" for semantic search, pattern matching, function finding
+2. Code Analysis Tasks - Use "Code Analysis Agent" for quality analysis, security analysis, language detection  
+3. Documentation Tasks - Use "Code Documentation Agent" for generating docs, analyzing existing docs
+
+SMART INFERENCE WITH SPECIFIC AGENTS:
+- "what language" query → SINGLE "Code Search Agent" task (NO complex breakdown)
+- "find functions" query → SINGLE "Code Search Agent" task with semantic search
+- "code quality" query → SINGLE "Code Analysis Agent" task
+- "security" query → SINGLE "Code Analysis Agent" task  
+- "documentation" query → SINGLE "Code Documentation Agent" task
 
 MINIMAL QUESTIONS STRATEGY:
-Only ask follow-up questions if the user query is extremely vague (single word or unclear intent).
-For most queries, infer intent and generate comprehensive task plan immediately.
+- For SIMPLE repository questions (language, files, structure): Create SINGLE task only
+- For COMPLEX multi-step requests: Create multiple tasks
+- Only ask follow-up questions if the user query is extremely vague (single word or unclear intent)
+- Default to SINGLE task for straightforward questions
 
 Your output should follow this JSON format exactly:
 {
@@ -91,14 +98,14 @@ EXAMPLE PLANNING FOR "what language is used for this repo?":
         'search_scope': 'entire_codebase',
         'language': 'auto_detect',
         'search_type': 'repository_analysis',
-        'analysis_depth': 'comprehensive',
+        'analysis_depth': 'immediate',
         'output_format': 'language_breakdown'
     },
     'tasks': [
         {
             'id': 1,
-            'description': 'Analyze the entire repository to identify all programming languages, file types, and technologies used',
-            'agent_type': 'code_analysis',
+            'description': 'Analyze repository files to identify programming languages and technology stack',
+            'agent_type': 'Code Search Agent',
             'status': 'pending'
         }
     ]
@@ -120,7 +127,7 @@ class LangraphPlannerAgent(BaseAgent):
         logger.info('Initializing LanggraphPlannerAgent for code search')
 
         super().__init__(
-            agent_name='PlannerAgent',
+            agent_name='planner_agent',
             description='Breakdown code search requests into executable tasks',
             content_types=['text', 'text/plain'],
         )

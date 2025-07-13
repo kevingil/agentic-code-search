@@ -30,30 +30,30 @@ def get_agent(agent_card: AgentCard):
     try:
         print(f"DEBUG: Creating agent for card: {agent_card.name}")
         
-        if agent_card.name == 'Orchestrator Agent':
+        if agent_card.name == 'orchestrator_agent':
             print(f"DEBUG: Initializing Orchestrator Agent")
             return OrchestratorAgent()
-        if agent_card.name == 'Langraph Planner Agent':
-            print(f"DEBUG: Initializing Langraph Planner Agent")
+        if agent_card.name == 'planner_agent':
+            print(f"DEBUG: Initializing Planner Agent")
             return LangraphPlannerAgent()
-        if agent_card.name == 'Code Search Agent':
+        if agent_card.name == 'code_search_agent':
             print(f"DEBUG: Initializing Code Search Agent")
             return CodeSearchAgent(
-                agent_name='CodeSearchAgent',
+                agent_name='code_search_agent',
                 description='Performs semantic code search and analysis across codebases',
                 instructions=prompts.CODE_SEARCH_INSTRUCTIONS,
             )
-        if agent_card.name == 'Code Analysis Agent':
+        if agent_card.name == 'code_analysis_agent':
             print(f"DEBUG: Initializing Code Analysis Agent")
             return CodeSearchAgent(
-                agent_name='CodeAnalysisAgent',
+                agent_name='code_analysis_agent',
                 description='Performs static code analysis and code quality assessment',
                 instructions=prompts.CODE_ANALYSIS_INSTRUCTIONS,
             )
-        if agent_card.name == 'Code Documentation Agent':
+        if agent_card.name == 'code_documentation_agent':
             print(f"DEBUG: Initializing Code Documentation Agent")
             return CodeSearchAgent(
-                agent_name='CodeDocumentationAgent',
+                agent_name='code_documentation_agent',
                 description='Generates and analyzes code documentation and comments',
                 instructions=prompts.CODE_DOCUMENTATION_INSTRUCTIONS,
             )

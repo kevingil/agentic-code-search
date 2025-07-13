@@ -58,16 +58,23 @@ class CodeSearchAgent(BaseAgent):
         session_aware_instructions = self.instructions
         if session_id:
             session_aware_instructions = f"""
-SESSION CONTEXT METADATA:
-Your current session ID is: {session_id}
-This represents a specific repository/codebase that has been processed and indexed.
-ALWAYS use this session_id when calling vector_search_code, get_session_files, or search_code_by_file_path.
+🚨 MANDATORY SESSION CONTEXT 🚨
+Your EXACT session ID is: {session_id}
+
+CRITICAL REQUIREMENTS:
+1. IMMEDIATELY use MCP tools with session_id="{session_id}" 
+2. For ANY question, start by calling get_session_files(session_id="{session_id}")
+3. Use the EXACT session_id "{session_id}" in every tool call
+4. Do NOT ask follow-up questions - use tools to get answers
 
 {self.instructions}
 
-IMPORTANT: You have access to a repository through session ID: {session_id}
-Do NOT ask for repository access or additional information about the repository.
-Start using MCP tools immediately with this session_id to answer the user's question.
+🚨 YOU MUST USE THESE TOOLS IMMEDIATELY:
+- get_session_files(session_id="{session_id}") 
+- vector_search_code(query="search_term", session_id="{session_id}")
+- search_code_by_file_path(file_path_pattern="*.py", session_id="{session_id}")
+
+FAILURE TO USE MCP TOOLS = TASK FAILURE
 """
 
         generate_content_config = genai_types.GenerateContentConfig(temperature=0.0)

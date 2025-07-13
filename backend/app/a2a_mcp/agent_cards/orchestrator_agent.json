@@ -1,5 +1,5 @@
 {
-    "name": "Orchestrator Agent",
+    "name": "orchestrator_agent",
     "description": "Orchestrates complex code search and analysis tasks",
     "url": "http://localhost:10101/",
     "provider": null,

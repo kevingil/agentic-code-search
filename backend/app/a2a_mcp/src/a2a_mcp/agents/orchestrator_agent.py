@@ -29,7 +29,7 @@ class OrchestratorAgent(BaseAgent):
         os.environ["GOOGLE_API_KEY"] = mcp_settings.GOOGLE_API_KEY
 
         super().__init__(
-            agent_name="Orchestrator Agent",
+            agent_name="orchestrator_agent",
             description="Coordinate complex code search and analysis workflows",
             content_types=["text", "text/plain"],
         )
@@ -39,6 +39,89 @@ class OrchestratorAgent(BaseAgent):
         self.code_search_context = {}
         self.query_history = []
         self.context_id = None
+        
+        # No need for separate agent - we'll handle simple questions directly
+
+    def is_simple_repository_question(self, query: str) -> bool:
+        """
+        Detect if this is a simple repository analysis question that can be answered directly
+        by a single agent using MCP tools, without complex workflow orchestration.
+        """
+        # Use LLM to determine if this is a simple repository question
+        try:
+            client = genai.Client()
+            analysis_prompt = f"""
+Analyze this user query and determine if it's a simple repository question that can be answered directly using code search tools:
+
+Query: "{query}"
+
+Simple repository questions include:
+- Questions about programming languages used
+- Questions about file structure or organization  
+- Questions about technologies, frameworks, or libraries used
+- Questions asking for repository overview or summary
+- Questions about specific files or directories
+- Questions about code patterns or functions
+
+Complex questions that need workflow orchestration:
+- Multi-step analysis requests
+- Questions requiring code generation or modification
+- Questions requiring complex cross-file analysis
+- Questions requiring external API calls or integrations
+
+Respond with just "SIMPLE" or "COMPLEX".
+"""
+            
+            response = client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=analysis_prompt,
+                config={"temperature": 0.0}
+            )
+            
+            result = response.text.strip().upper()
+            return result == "SIMPLE"
+            
+        except Exception as e:
+            logger.error(f"Error in LLM-based question classification: {e}")
+            # Fallback to assuming it's simple if we can't classify
+            return True
+
+
+
+    async def _route_to_code_search_agent(self, query: str, context_id: str, task_id: str) -> AsyncIterable[dict[str, any]]:
+        """
+        Route simple repository questions directly to a Code Search Agent that uses MCP tools.
+        """
+        logger.info(f"Routing to Code Search Agent: {query}")
+        
+        try:
+            # Import here to avoid circular imports
+            from .adk_travel_agent import CodeSearchAgent
+            
+            # Create Code Search Agent with proper configuration
+            code_agent = CodeSearchAgent(
+                agent_name="code_search_agent",
+                description="Code search agent for direct repository analysis",
+                instructions=prompts.CODE_SEARCH_INSTRUCTIONS
+            )
+            
+            # Initialize agent with session context
+            await code_agent.init_agent(session_id=context_id)
+            
+            # Stream responses from the Code Search Agent
+            async for chunk in code_agent.stream(query, context_id, task_id):
+                yield chunk
+                
+        except Exception as e:
+            logger.error(f"Error routing to Code Search Agent: {e}")
+            yield {
+                'response_type': 'text',
+                'is_task_complete': True,
+                'require_user_input': False,
+                'content': f"Error: Unable to process repository question - {str(e)}"
+            }
+
+
 
     async def generate_summary(self) -> str:
         client = genai.Client()
@@ -120,6 +203,23 @@ class OrchestratorAgent(BaseAgent):
             self.context_id = context_id
 
         self.query_history.append(query)
+        
+        # Check if this is a simple repository question that can be answered directly
+        if self.is_simple_repository_question(query):
+            logger.info(f"Detected simple repository question, routing to Code Search Agent: {query}")
+            
+            try:
+                # Route directly to Code Search Agent with proper MCP tools access
+                async for chunk in self._route_to_code_search_agent(query, context_id, task_id):
+                    yield chunk
+                return
+                
+            except Exception as e:
+                logger.error(f"Error in direct agent routing: {e}")
+                # Fall back to normal workflow orchestration
+                logger.info("Falling back to normal workflow orchestration")
+                pass
+        
         start_node_id = None
         # Graph does not exist, start a new graph with planner node.
         if not self.graph:
@@ -207,6 +307,11 @@ class OrchestratorAgent(BaseAgent):
                                     query=task_data["description"],
                                     node_id=current_node_id,
                                 )
+                                
+                                # Set agent_type attribute if available
+                                if "agent_type" in task_data:
+                                    self.graph.set_node_attribute(node.id, "agent_type", task_data["agent_type"])
+                                
                                 current_node_id = node.id
                                 # Restart graph from the newly inserted subgraph state
                                 # Start from the new node just created.

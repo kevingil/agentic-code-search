@@ -1,6 +1,6 @@
 {
-    "name": "Code Analysis Agent",
-    "description": "Performs static code analysis and code quality assessment",
+    "name": "code_analysis_agent",
+    "description": "Performs comprehensive code analysis including quality assessment, security analysis, complexity evaluation, and language detection",
     "url": "http://localhost:10104/",
     "provider": null,
     "version": "1.0.0",
@@ -22,25 +22,100 @@
     ],
     "defaultOutputModes": [
         "text",
-        "text/plain"
+        "text/plain",
+        "application/json"
     ],
     "skills": [
         {
             "id": "code_analysis",
-            "name": "Static Code Analysis",
-            "description": "Analyzes code quality, identifies patterns, suggests improvements, and detects potential issues",
+            "name": "Comprehensive Code Analysis",
+            "description": "Analyzes code quality, identifies patterns, suggests improvements, detects potential issues, and evaluates complexity metrics",
             "tags": [
                 "static analysis",
                 "code quality",
-                "refactoring suggestions"
+                "refactoring suggestions",
+                "complexity metrics",
+                "maintainability"
             ],
             "examples": [
                 "Analyze code complexity and suggest refactoring opportunities",
                 "Find potential security vulnerabilities",
-                "Identify code duplication and design patterns"
+                "Identify code duplication and design patterns",
+                "Evaluate technical debt and maintainability",
+                "Assess code coverage and test quality"
             ],
-            "inputModes": null,
-            "outputModes": null
+            "inputModes": ["text"],
+            "outputModes": ["text", "application/json"]
+        },
+        {
+            "id": "language_analysis",
+            "name": "Programming Language Analysis",
+            "description": "Analyze programming languages, frameworks, and technologies used in the codebase",
+            "tags": [
+                "language detection",
+                "framework analysis", 
+                "technology stack",
+                "dependency analysis"
+            ],
+            "examples": [
+                "What programming languages are used in this repository?",
+                "Identify the main frameworks and libraries",
+                "Analyze the technology stack",
+                "List dependencies and their versions",
+                "Detect file types and language distribution"
+            ],
+            "inputModes": ["text"],
+            "outputModes": ["text", "application/json"]
+        },
+        {
+            "id": "security_analysis",
+            "name": "Security Analysis",
+            "description": "Identify potential security vulnerabilities and security best practices in code",
+            "tags": [
+                "security analysis",
+                "vulnerability detection",
+                "security patterns",
+                "best practices"
+            ],
+            "examples": [
+                "Check for SQL injection vulnerabilities",
+                "Analyze authentication security patterns",
+                "Identify potential XSS vulnerabilities", 
+                "Review security configurations",
+                "Detect hardcoded secrets and credentials"
+            ],
+            "inputModes": ["text"],
+            "outputModes": ["text", "application/json"]
+        },
+        {
+            "id": "pattern_analysis",
+            "name": "Code Pattern Analysis",
+            "description": "Search for and analyze specific code patterns, design patterns, and architectural patterns",
+            "tags": [
+                "pattern search",
+                "design patterns",
+                "architectural analysis",
+                "code patterns"
+            ],
+            "examples": [
+                "Find all instances of the singleton pattern",
+                "Identify MVC architecture components",
+                "Search for dependency injection patterns",
+                "Analyze error handling patterns",
+                "Detect anti-patterns and code smells"
+            ],
+            "inputModes": ["text"],
+            "outputModes": ["text", "application/json"]
         }
-    ]
+    ],
+    "mcp_tools": [
+        "vector_search_code",
+        "search_code_patterns",
+        "analyze_code_quality", 
+        "query_code_database",
+        "search_code_by_file_path",
+        "list_code_sessions",
+        "get_session_files"
+    ],
+    "mcp_server": "http://localhost:10100/"
 }

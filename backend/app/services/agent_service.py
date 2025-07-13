@@ -38,28 +38,28 @@ class AgentService:
             # We can get these from the agent cards
             "orchestrator": AgentConfig(
                 agent_type="orchestrator",
-                agent_name="Orchestrator Agent",
+                agent_name="orchestrator_agent",
                 description="Orchestrates complex code search and analysis tasks",
                 instructions="You are an orchestrator agent that manages complex code search and analysis tasks by coordinating with specialized agents.",
                 capabilities=["task_orchestration", "agent_coordination", "workflow_management"]
             ),
             "code_search": AgentConfig(
                 agent_type="code_search",
-                agent_name="Code Search Agent",
+                agent_name="code_search_agent",
                 description="Performs semantic code search and analysis across codebases",
                 instructions="You are an expert code search agent. Help users find relevant code patterns, functions, and implementations across codebases using semantic search.",
                 capabilities=["semantic_search", "pattern_matching", "code_analysis"]
             ),
             "code_analysis": AgentConfig(
                 agent_type="code_analysis",
-                agent_name="Code Analysis Agent",
+                agent_name="code_analysis_agent",
                 description="Performs static code analysis and code quality assessment",
                 instructions="You are an expert code analysis agent. Help users analyze code quality, identify patterns, suggest improvements, and detect potential issues.",
                 capabilities=["static_analysis", "code_quality", "refactoring_suggestions"]
             ),
             "code_documentation": AgentConfig(
                 agent_type="code_documentation",
-                agent_name="Code Documentation Agent",
+                agent_name="code_documentation_agent",
                 description="Generates and analyzes code documentation and comments",
                 instructions="You are an expert code documentation agent. Help users create comprehensive documentation, docstrings, and comments for their code.",
                 capabilities=["documentation_generation", "docstring_creation", "code_comments"]

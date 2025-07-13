@@ -652,12 +652,13 @@ def serve(host, port, transport):  # noqa: PLR0915
         Returns:
             JSON string with search results including code snippets and metadata
         """
+        logger.info(f"🚨 MCP TOOL CALLED: vector_search_code with query='{query}' session_id={session_id}")
         try:
             # Check if vector search service is available
             if not vector_search_service:
-                return json.dumps({
-                    "error": "Vector search not available. Please configure database connection with POSTGRES_USER, POSTGRES_PASSWORD, and POSTGRES_DB environment variables."
-                })
+                error_msg = "Vector search not available. Please configure database connection with POSTGRES_USER, POSTGRES_PASSWORD, and POSTGRES_DB environment variables."
+                logger.error(f"🚨 Vector search service not available: {error_msg}")
+                return json.dumps({"error": error_msg})
             
             # Validate inputs
             limit = min(max(1, limit), 50)  # Clamp between 1 and 50
@@ -759,12 +760,13 @@ def serve(host, port, transport):  # noqa: PLR0915
         Returns:
             JSON string with file information and chunk statistics
         """
+        logger.info(f"🚨 MCP TOOL CALLED: get_session_files with session_id={session_id}")
         try:
             # Check if vector search service is available
             if not vector_search_service:
-                return json.dumps({
-                    "error": "Vector search not available. Please configure database connection with POSTGRES_USER, POSTGRES_PASSWORD, and POSTGRES_DB environment variables."
-                })
+                error_msg = "Vector search not available. Please configure database connection with POSTGRES_USER, POSTGRES_PASSWORD, and POSTGRES_DB environment variables."
+                logger.error(f"🚨 Vector search service not available: {error_msg}")
+                return json.dumps({"error": error_msg})
             
             # Parse session_id
             try:
@@ -787,6 +789,7 @@ def serve(host, port, transport):  # noqa: PLR0915
                 "files": files
             }
             
+            logger.info(f"🚨 MCP TOOL SUCCESS: get_session_files returned {len(files)} files for session {session_id}")
             return json.dumps(response, indent=2)
             
         except Exception as e:

@@ -1,6 +1,6 @@
 {
-    "name": "Code Search Agent",
-    "description": "Performs semantic code search and analysis across codebases",
+    "name": "code_search_agent",
+    "description": "Performs semantic code search and analysis across codebases using vector embeddings and natural language queries",
     "url": "http://localhost:10103/",
     "provider": null,
     "version": "1.0.0",
@@ -22,25 +22,76 @@
     ],
     "defaultOutputModes": [
         "text",
-        "text/plain"
+        "text/plain",
+        "application/json"
     ],
     "skills": [
         {
             "id": "semantic_search",
             "name": "Semantic Code Search",
-            "description": "Performs semantic search across codebases to find relevant code patterns, functions, and implementations",
+            "description": "Performs semantic search across codebases using vector embeddings to find relevant code patterns, functions, and implementations",
             "tags": [
                 "semantic search",
+                "vector search",
                 "code analysis",
-                "pattern matching"
+                "pattern matching",
+                "natural language queries"
             ],
             "examples": [
                 "Find all authentication functions in the codebase",
                 "Search for API endpoint implementations",
-                "Find error handling patterns"
+                "Find error handling patterns",
+                "Locate payment processing code",
+                "What language is this repository written in?",
+                "Find database connection logic"
             ],
-            "inputModes": null,
-            "outputModes": null
+            "inputModes": ["text"],
+            "outputModes": ["text", "application/json"]
+        },
+        {
+            "id": "repository_analysis",
+            "name": "Repository Analysis", 
+            "description": "Analyze repository structure, file organization, and language composition",
+            "tags": [
+                "repository analysis",
+                "language detection",
+                "file structure",
+                "codebase overview"
+            ],
+            "examples": [
+                "What programming languages are used in this repository?",
+                "Analyze the overall structure of the codebase",
+                "List all files and their types in the repository",
+                "Provide an overview of the repository organization"
+            ],
+            "inputModes": ["text"],
+            "outputModes": ["text", "application/json"]
+        },
+        {
+            "id": "file_path_search",
+            "name": "File Path Search",
+            "description": "Search for files by name patterns and paths within the codebase",
+            "tags": [
+                "file search",
+                "path matching", 
+                "file discovery"
+            ],
+            "examples": [
+                "Find all TypeScript files in the components directory",
+                "Locate configuration files",
+                "Search for test files",
+                "Find all Python modules"
+            ],
+            "inputModes": ["text"],
+            "outputModes": ["text", "application/json"]
         }
-    ]
+    ],
+    "mcp_tools": [
+        "vector_search_code",
+        "list_code_sessions",
+        "get_session_files", 
+        "search_code_by_file_path",
+        "generate_query_embedding"
+    ],
+    "mcp_server": "http://localhost:10100/"
 }

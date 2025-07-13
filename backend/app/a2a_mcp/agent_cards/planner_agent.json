@@ -1,6 +1,6 @@
 {
-    "name": "Langraph Planner Agent",
-    "description": "Plans and breaks down complex code search requests into actionable tasks",
+    "name": "planner_agent",
+    "description": "Plans and breaks down complex code search requests into actionable tasks using available code search, analysis, and documentation agents",
     "url": "http://localhost:10102/",
     "provider": null,
     "version": "1.0.0",
@@ -22,25 +22,53 @@
     ],
     "defaultOutputModes": [
         "text",
-        "text/plain"
+        "text/plain",
+        "application/json"
     ],
     "skills": [
         {
             "id": "code_search_planning",
             "name": "Code Search Task Planning",
-            "description": "Breaks down complex code search and analysis requests into actionable subtasks",
+            "description": "Breaks down complex code search and analysis requests into actionable subtasks using available agent types: code_search, code_analysis, code_documentation",
             "tags": [
                 "task planning",
                 "code search strategy",
-                "workflow decomposition"
+                "workflow decomposition",
+                "agent orchestration"
             ],
             "examples": [
                 "Plan a comprehensive security audit of the authentication system",
                 "Create a strategy for refactoring legacy code modules",
-                "Design a workflow for documenting undocumented API endpoints"
+                "Design a workflow for documenting undocumented API endpoints",
+                "Plan language analysis and repository structure assessment",
+                "Create tasks for finding specific functions or patterns in code"
             ],
-            "inputModes": null,
-            "outputModes": null
+            "inputModes": ["text"],
+            "outputModes": ["text", "application/json"]
+        },
+        {
+            "id": "agent_task_mapping",
+            "name": "Agent Task Mapping",
+            "description": "Maps user requests to appropriate agent types and creates specific task descriptions",
+            "tags": [
+                "task mapping",
+                "agent selection",
+                "task decomposition"
+            ],
+            "examples": [
+                "Map 'what language is this repo' to code_analysis tasks",
+                "Map 'find authentication code' to code_search tasks",
+                "Map 'generate API docs' to code_documentation tasks",
+                "Create multi-step workflows combining different agent types"
+            ],
+            "inputModes": ["text"],
+            "outputModes": ["application/json"]
         }
-    ]
+    ],
+    "available_agents": [
+        "Code Search Agent",
+        "Code Analysis Agent", 
+        "Code Documentation Agent"
+    ],
+    "planning_strategy": "immediate_action_oriented"
 }
