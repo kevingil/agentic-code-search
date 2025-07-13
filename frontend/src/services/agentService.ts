@@ -39,6 +39,10 @@ export interface CodeSearchSession {
   agent_type: string
   created_at: Date
   last_used: Date
+  is_active: boolean
+  vector_embeddings_processed: boolean
+  updated_at: Date
+  owner_id: string
   messages: Array<{
     id: string
     type: "user" | "agent"
@@ -49,14 +53,29 @@ export interface CodeSearchSession {
   }>
 }
 
-export interface SessionsStorageData {
-  sessions: CodeSearchSession[]
-  activeSessionId: string | null
+export interface CodeSearchSessionCreate {
+  name: string
+  github_url?: string
+  agent_type?: string
+}
+
+export interface CodeSearchSessionsResponse {
+  data: CodeSearchSession[]
+  count: number
+}
+
+export interface EmbeddingsStatus {
+  session_id: string
+  embeddings_processed: boolean
+  embeddings_count: number
+  created_at: Date
+  updated_at: Date
 }
 
 class AgentService {
   private baseURL: string
-  private storageKey = "codeSearch_sessions"
+  private activeSessionId: string | null = null
+  private sessionsCache: CodeSearchSession[] = []
 
   constructor() {
     this.baseURL = OpenAPI.BASE || "http://localhost:8000"
@@ -105,14 +124,13 @@ class AgentService {
     })
   }
 
-  // Stream agent responses
+  // Stream agent query responses
   async* streamAgentQuery(request: AgentQueryRequest): AsyncGenerator<StreamChunk, void, unknown> {
     const url = `${this.baseURL}/api/v1/agents/query/stream`
-    const token = localStorage.getItem("access_token")
     
+    const token = localStorage.getItem("access_token")
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      "Accept": "text/event-stream",
     }
 
     if (token) {
@@ -129,28 +147,40 @@ class AgentService {
       throw new Error(`HTTP error! status: ${response.status}`)
     }
 
-    if (!response.body) {
+    const reader = response.body?.getReader()
+    const decoder = new TextDecoder()
+
+    if (!reader) {
       throw new Error("No response body")
     }
 
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
+    let buffer = ""
 
     try {
       while (true) {
         const { done, value } = await reader.read()
-        if (done) break
+        
+        if (done) {
+          break
+        }
 
-        const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split("\n")
-
+        buffer += decoder.decode(value, { stream: true })
+        
+        // Process complete lines
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || "" // Keep incomplete line in buffer
+        
         for (const line of lines) {
+          if (line.trim() === "") continue
+          
+          // Parse SSE format
           if (line.startsWith("data: ")) {
+            const data = line.slice(6)
             try {
-              const data = JSON.parse(line.slice(6))
-              yield data as StreamChunk
+              const chunk = JSON.parse(data)
+              yield chunk
             } catch (e) {
-              console.error("Failed to parse streaming data:", e)
+              console.error("Failed to parse chunk:", e)
             }
           }
         }
@@ -167,118 +197,164 @@ class AgentService {
     })
   }
 
-  // Session Management Methods
-  private getSessionsData(): SessionsStorageData {
-    const data = localStorage.getItem(this.storageKey)
-    return data ? JSON.parse(data) : { sessions: [], activeSessionId: null }
-  }
-
-  private saveSessionsData(data: SessionsStorageData): void {
-    localStorage.setItem(this.storageKey, JSON.stringify(data))
-  }
-
-  getSessions(): CodeSearchSession[] {
-    const data = this.getSessionsData()
-    return data.sessions.map(session => ({
-      ...session,
-      created_at: new Date(session.created_at),
-      last_used: new Date(session.last_used),
-      messages: session.messages.map(msg => ({
-        ...msg,
-        timestamp: new Date(msg.timestamp)
+  // Session Management Methods using backend API
+  async getSessions(): Promise<CodeSearchSession[]> {
+    try {
+      const response = await this.makeRequest<CodeSearchSessionsResponse>("/api/v1/code-search/sessions")
+      this.sessionsCache = response.data.map(session => ({
+        ...session,
+        created_at: new Date(session.created_at),
+        last_used: new Date(session.last_used),
+        updated_at: new Date(session.updated_at),
+        messages: [] // Messages are handled separately for now
       }))
-    }))
-  }
-
-  createSession(name: string, agentType: string = "orchestrator", githubUrl?: string): CodeSearchSession {
-    const session: CodeSearchSession = {
-      id: `session_${Date.now()}`,
-      name,
-      github_url: githubUrl,
-      agent_type: agentType,
-      created_at: new Date(),
-      last_used: new Date(),
-      messages: []
+      return this.sessionsCache
+    } catch (error) {
+      console.error("Failed to get sessions:", error)
+      return []
     }
-
-    const data = this.getSessionsData()
-    data.sessions.unshift(session)
-    data.activeSessionId = session.id
-    this.saveSessionsData(data)
-
-    return session
   }
 
-  getSession(sessionId: string): CodeSearchSession | null {
-    const sessions = this.getSessions()
-    return sessions.find(s => s.id === sessionId) || null
-  }
-
-  updateSession(sessionId: string, updates: Partial<CodeSearchSession>): void {
-    const data = this.getSessionsData()
-    const sessionIndex = data.sessions.findIndex(s => s.id === sessionId)
-    
-    if (sessionIndex !== -1) {
-      data.sessions[sessionIndex] = {
-        ...data.sessions[sessionIndex],
-        ...updates,
-        last_used: new Date()
+  async createSession(name: string, agentType: string = "orchestrator", githubUrl?: string): Promise<CodeSearchSession> {
+    try {
+      const sessionData: CodeSearchSessionCreate = {
+        name,
+        github_url: githubUrl,
+        agent_type: agentType
       }
-      this.saveSessionsData(data)
+      
+      const session = await this.makeRequest<CodeSearchSession>("/api/v1/code-search/sessions", {
+        method: "POST",
+        body: JSON.stringify(sessionData)
+      })
+      
+      // Convert date strings to Date objects
+      const formattedSession = {
+        ...session,
+        created_at: new Date(session.created_at),
+        last_used: new Date(session.last_used),
+        updated_at: new Date(session.updated_at),
+        messages: []
+      }
+      
+      // Update cache
+      this.sessionsCache.unshift(formattedSession)
+      this.activeSessionId = session.id
+      
+      return formattedSession
+    } catch (error) {
+      console.error("Failed to create session:", error)
+      throw error
     }
   }
 
-  deleteSession(sessionId: string): void {
-    const data = this.getSessionsData()
-    data.sessions = data.sessions.filter(s => s.id !== sessionId)
-    
-    if (data.activeSessionId === sessionId) {
-      data.activeSessionId = data.sessions.length > 0 ? data.sessions[0].id : null
+  async getSession(sessionId: string): Promise<CodeSearchSession | null> {
+    try {
+      const session = await this.makeRequest<CodeSearchSession>(`/api/v1/code-search/sessions/${sessionId}`)
+      return {
+        ...session,
+        created_at: new Date(session.created_at),
+        last_used: new Date(session.last_used),
+        updated_at: new Date(session.updated_at),
+        messages: []
+      }
+    } catch (error) {
+      console.error("Failed to get session:", error)
+      return null
     }
-    
-    this.saveSessionsData(data)
+  }
+
+  async updateSession(sessionId: string, updates: Partial<CodeSearchSession>): Promise<void> {
+    try {
+      const session = await this.makeRequest<CodeSearchSession>(`/api/v1/code-search/sessions/${sessionId}`, {
+        method: "PUT",
+        body: JSON.stringify(updates)
+      })
+      
+      // Update cache
+      const index = this.sessionsCache.findIndex(s => s.id === sessionId)
+      if (index !== -1) {
+        this.sessionsCache[index] = {
+          ...session,
+          created_at: new Date(session.created_at),
+          last_used: new Date(session.last_used),
+          updated_at: new Date(session.updated_at),
+          messages: this.sessionsCache[index].messages
+        }
+      }
+    } catch (error) {
+      console.error("Failed to update session:", error)
+    }
+  }
+
+  async deleteSession(sessionId: string): Promise<void> {
+    try {
+      await this.makeRequest<{ message: string }>(`/api/v1/code-search/sessions/${sessionId}`, {
+        method: "DELETE"
+      })
+      
+      // Update cache
+      this.sessionsCache = this.sessionsCache.filter(s => s.id !== sessionId)
+      
+      if (this.activeSessionId === sessionId) {
+        this.activeSessionId = this.sessionsCache.length > 0 ? this.sessionsCache[0].id : null
+      }
+    } catch (error) {
+      console.error("Failed to delete session:", error)
+    }
+  }
+
+  async getEmbeddingsStatus(sessionId: string): Promise<EmbeddingsStatus | null> {
+    try {
+      return await this.makeRequest<EmbeddingsStatus>(`/api/v1/code-search/sessions/${sessionId}/embeddings-status`)
+    } catch (error) {
+      console.error("Failed to get embeddings status:", error)
+      return null
+    }
+  }
+
+  async regenerateEmbeddings(sessionId: string): Promise<void> {
+    try {
+      await this.makeRequest<{ message: string }>(`/api/v1/code-search/sessions/${sessionId}/regenerate-embeddings`, {
+        method: "POST"
+      })
+    } catch (error) {
+      console.error("Failed to regenerate embeddings:", error)
+      throw error
+    }
   }
 
   setActiveSession(sessionId: string): void {
-    const data = this.getSessionsData()
-    data.activeSessionId = sessionId
-    this.saveSessionsData(data)
+    this.activeSessionId = sessionId
   }
 
   clearActiveSession(): void {
-    const data = this.getSessionsData()
-    data.activeSessionId = null
-    this.saveSessionsData(data)
+    this.activeSessionId = null
   }
 
   getActiveSession(): CodeSearchSession | null {
-    const data = this.getSessionsData()
-    return data.activeSessionId ? this.getSession(data.activeSessionId) : null
+    if (!this.activeSessionId) return null
+    return this.sessionsCache.find(s => s.id === this.activeSessionId) || null
   }
 
+  // In-memory message management (for now - could be moved to backend later)
   addMessageToSession(sessionId: string, message: CodeSearchSession['messages'][0]): void {
-    const data = this.getSessionsData()
-    const sessionIndex = data.sessions.findIndex(s => s.id === sessionId)
-    
-    if (sessionIndex !== -1) {
-      data.sessions[sessionIndex].messages.push(message)
-      data.sessions[sessionIndex].last_used = new Date()
-      this.saveSessionsData(data)
+    const session = this.sessionsCache.find(s => s.id === sessionId)
+    if (session) {
+      session.messages.push(message)
+      session.last_used = new Date()
     }
   }
 
   updateMessageInSession(sessionId: string, messageId: string, updates: Partial<CodeSearchSession['messages'][0]>): void {
-    const data = this.getSessionsData()
-    const sessionIndex = data.sessions.findIndex(s => s.id === sessionId)
-    
-    if (sessionIndex !== -1) {
-      const messageIndex = data.sessions[sessionIndex].messages.findIndex(m => m.id === messageId)
+    const session = this.sessionsCache.find(s => s.id === sessionId)
+    if (session) {
+      const messageIndex = session.messages.findIndex(m => m.id === messageId)
       if (messageIndex !== -1) {
-        data.sessions[sessionIndex].messages[messageIndex] = {
-          ...data.sessions[sessionIndex].messages[messageIndex],
+        session.messages[messageIndex] = {
+          ...session.messages[messageIndex],
           ...updates
         }
-        this.saveSessionsData(data)
       }
     }
   }
