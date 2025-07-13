@@ -399,9 +399,17 @@ function CodeSearch() {
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault()
-      handleSearch()
+    if (e.key === "Enter") {
+      if (e.ctrlKey || e.metaKey) {
+        // Ctrl+Enter (Windows/Linux) or Cmd+Enter (macOS): always submit
+        e.preventDefault()
+        handleSearch()
+      } else if (!e.shiftKey) {
+        // Enter alone: submit
+        e.preventDefault()
+        handleSearch()
+      }
+      // Shift+Enter: do nothing (default behavior for new line)
     }
   }
 
@@ -607,7 +615,7 @@ function CodeSearch() {
 
         {/* Conversation History - when session is active */}
         {currentSession && (
-          <Box h="full" overflow="auto" pb="140px" px={4}>
+          <Box h="full" overflow="auto" pb="190px" px={4}>
             <Box maxW="4xl" mx="auto" py={4}>
               {currentSession.messages.length === 0 ? (
                 <Box textAlign="center" py={12}>
@@ -681,18 +689,31 @@ function CodeSearch() {
       {currentSession && (
         <Box
           position="fixed"
+          display="flex"
+          justifyContent="center"
+          alignItems="center"
           bottom={4}
           left={{ base: 4, md: "calc(320px + 2rem)" }}
           right={4}
           bg="white"
           borderTop="1px"
           borderColor="gray.200"
-          p={4}
-          shadow="lg"
+        >
+          <Box
+          display="flex"
+          justifyContent="center"
+          alignItems="center"
+          bg="white"
+          borderTop="1px"
+          borderColor="gray.200"
+          shadow="xl"
           rounded="md"
           border="1px"
+          w="100%"
+          p={4}
+          maxW="6xl"
         >
-          <Box maxW="4xl" mx="auto">
+          <Box w="100%" mx="auto">
             <VStack gap={3}>
               <Textarea
                 placeholder="Ask a question about your codebase... (e.g., 'How does user authentication work?', 'Where is the payment processing logic?')"
@@ -701,6 +722,7 @@ function CodeSearch() {
                 onKeyPress={handleKeyPress}
                 rows={3}
                 resize="none"
+                h="120px"
                 maxH="120px"
                 bg="white"
                 border="1px"
@@ -709,7 +731,7 @@ function CodeSearch() {
               />
               <HStack justify="space-between" w="full">
                 <Text fontSize="sm" color="gray.500">
-                  Press Enter to search, Shift+Enter for new line
+                  Press Enter or Cmd+Enter to search, Shift+Enter for new line
                 </Text>
                 <Button
                   onClick={handleSearch}
@@ -722,6 +744,7 @@ function CodeSearch() {
                 </Button>
               </HStack>
             </VStack>
+          </Box>
           </Box>
         </Box>
       )}

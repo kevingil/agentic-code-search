@@ -1,6 +1,6 @@
 import { Box, Flex, Icon, Text, VStack, HStack, IconButton } from "@chakra-ui/react"
 import { useQueryClient } from "@tanstack/react-query"
-import { Link as RouterLink, useRouterState } from "@tanstack/react-router"
+import { Link as RouterLink, useRouterState, useNavigate } from "@tanstack/react-router"
 import { FiBriefcase, FiHome, FiSearch, FiSettings, FiUsers, FiPlus, FiTrash2, FiGithub } from "react-icons/fi"
 import { useState, useEffect } from "react"
 import type { IconType } from "react-icons/lib"
@@ -29,6 +29,7 @@ const SidebarItems = ({ onClose }: SidebarItemsProps) => {
   const queryClient = useQueryClient()
   const currentUser = queryClient.getQueryData<UserPublic>(["currentUser"])
   const router = useRouterState()
+  const navigate = useNavigate()
   const [sessions, setSessions] = useState<CodeSearchSession[]>([])
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
 
@@ -76,8 +77,11 @@ const SidebarItems = ({ onClose }: SidebarItemsProps) => {
     agentService.setActiveSession(sessionId)
     setActiveSessionId(sessionId)
     
-    // Trigger refresh of code search component
-    if (isCodeSearchRoute) {
+    // Navigate to code search route if not already there
+    if (!isCodeSearchRoute) {
+      navigate({ to: "/code-search" })
+    } else {
+      // Trigger refresh of code search component if already on the route
       window.dispatchEvent(new CustomEvent('sessionChanged', { detail: { sessionId } }))
     }
   }
@@ -125,8 +129,6 @@ const SidebarItems = ({ onClose }: SidebarItemsProps) => {
         <Box>{listItems}</Box>
       </Box>
 
-      {/* Sessions Section - only show on code search route */}
-      {isCodeSearchRoute && (
         <Box>
           <HStack justify="space-between" px={4} py={2}>
             <Text fontSize="xs" fontWeight="bold">
@@ -196,7 +198,7 @@ const SidebarItems = ({ onClose }: SidebarItemsProps) => {
             )}
           </Box>
         </Box>
-      )}
+
     </VStack>
   )
 }
