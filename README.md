@@ -230,6 +230,32 @@ General development docs: [development.md](./development.md).
 
 This includes using Docker Compose, custom local domains, `.env` configurations, etc.
 
+# Developing MCP & Agents
+
+```bash
+# Main Server
+fastapi run --reload app/main.py
+
+# MCP Server
+uv run python -m app.a2a_mcp --run mcp-server --transport sse --host localhost --port 10100
+
+# Orchestrator Agent
+uv run python -m app.a2a_mcp.src.a2a_mcp.agents --agent-card app/a2a_mcp/agent_cards/orchestrator_agent.json --host localhost --port 10101
+
+# Planner Agent
+uv run python -m app.a2a_mcp.src.a2a_mcp.agents --agent-card app/a2a_mcp/agent_cards/planner_agent.json --host localhost --port 10102
+
+# These are reference agents from Google's A2A MCP example
+
+# Air Ticketing Agent Reference
+uv run python -m app.a2a_mcp.src.a2a_mcp.agents --agent-card app/a2a_mcp/agent_cards/air_ticketing_agent.json --host localhost --port 10103 
+
+#  Hotel Booking Agent Reference
+uv run python -m app.a2a_mcp.src.a2a_mcp.agents  --agent-card app/a2a_mcp/agent_cards/hotel_booking_agent.json --host localhost --port 10104
+
+```
+
+
 ## Release Notes
 
 Check the file [release-notes.md](./release-notes.md).
