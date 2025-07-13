@@ -337,32 +337,56 @@ function CodeSearch() {
             raw_data: chunk.content, // Store the full data for artifacts
           }
         } else if (chunk.content && chunk.is_task_complete !== true) {
-          // This is a processing/status message - collect it but don't append to main content
-          processingMessages.push(chunk.content)
-          
-          lastMetadata = {
-            response_type: chunk.response_type || 'text',
-            is_task_complete: false,
-            require_user_input: chunk.require_user_input || false,
-            errors: collectedErrors.length > 0 ? collectedErrors : undefined,
-            processing_messages: processingMessages,
-          }
-          
-          // For processing messages, show them as temporary status
-          const statusMessage = {
-            content: processingMessages.join('\n'),
-            status: "streaming" as const,
-            metadata: lastMetadata,
-          }
-          
-          agentService.updateMessageInSession(currentSession.id, agentMessageId, statusMessage)
-          
-          setCurrentSessionMessages(prev => 
-            prev.map((msg: Message) =>
-              msg.id === agentMessageId ? { ...msg, ...statusMessage } : msg
-            )
+          // Check if this looks like a processing message vs actual content
+          const content = chunk.content
+          const isProcessingMessage = (
+            content.includes("Processing") ||
+            content.includes("thinking") ||
+            content.includes("analyzing") ||
+            content.includes("searching") ||
+            content.startsWith("```json") ||
+            (content.includes("{") && content.includes("}") && content.includes("tasks"))
           )
-          continue
+          
+          if (isProcessingMessage) {
+            // This is a processing/status message - collect it but don't append to main content
+            processingMessages.push(content)
+            
+            lastMetadata = {
+              response_type: chunk.response_type || 'text',
+              is_task_complete: false,
+              require_user_input: chunk.require_user_input || false,
+              errors: collectedErrors.length > 0 ? collectedErrors : undefined,
+              processing_messages: processingMessages,
+            }
+            
+            // For processing messages, show them as temporary status
+            const statusMessage = {
+              content: processingMessages.join('\n'),
+              status: "streaming" as const,
+              metadata: lastMetadata,
+            }
+            
+            agentService.updateMessageInSession(currentSession.id, agentMessageId, statusMessage)
+            
+            setCurrentSessionMessages(prev => 
+              prev.map((msg: Message) =>
+                msg.id === agentMessageId ? { ...msg, ...statusMessage } : msg
+              )
+            )
+            continue
+          } else {
+            // This is actual content that should be displayed
+            fullContent = content
+            
+            lastMetadata = {
+              response_type: chunk.response_type || 'text',
+              is_task_complete: chunk.is_task_complete || false,
+              require_user_input: chunk.require_user_input || false,
+              errors: collectedErrors.length > 0 ? collectedErrors : undefined,
+              processing_messages: processingMessages,
+            }
+          }
         }
 
         // Update the agent message with final content or intermediate updates
