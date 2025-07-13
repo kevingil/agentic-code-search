@@ -1,7 +1,7 @@
 import { Box, Flex, Icon, Text, VStack, HStack, IconButton } from "@chakra-ui/react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Link as RouterLink, useRouterState, useNavigate } from "@tanstack/react-router"
-import { FiBriefcase, FiHome, FiSearch, FiSettings, FiUsers, FiPlus, FiTrash2, FiGithub } from "react-icons/fi"
+import { FiSearch, FiSettings, FiUsers, FiPlus, FiTrash2, FiGithub } from "react-icons/fi"
 import { useState, useEffect } from "react"
 import type { IconType } from "react-icons/lib"
 
@@ -10,8 +10,6 @@ import { agentService, type CodeSearchSession } from "@/services/agentService"
 
 const items = [
   { icon: FiSearch, title: "Code Search", path: "/code-search" },
-  { icon: FiHome, title: "Dashboard", path: "/dashboard" },
-  { icon: FiBriefcase, title: "Items", path: "/items" },
   { icon: FiSettings, title: "User Settings", path: "/settings" },
 ]
 
@@ -110,7 +108,7 @@ const SidebarItems = ({ onClose }: SidebarItemsProps) => {
         }}
         alignItems="center"
         fontSize="sm"
-        bg={router.location.pathname === path ? "blue.50" : "transparent"}
+        bg={router.location.pathname === path ? "purple.50" : "transparent"}
         borderRadius="md"
         mx={2}
       >
@@ -159,7 +157,7 @@ const SidebarItems = ({ onClose }: SidebarItemsProps) => {
                   justify="space-between"
                   px={2}
                   py={2}
-                  bg={activeSessionId === session.id ? "blue.50" : "transparent"}
+                  bg={activeSessionId === session.id ? "purple.50" : "transparent"}
                   borderRadius="md"
                   _hover={{ bg: "gray.50" }}
                   cursor="pointer"

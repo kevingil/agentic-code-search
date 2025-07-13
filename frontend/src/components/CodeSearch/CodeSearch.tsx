@@ -539,7 +539,7 @@ function CodeSearch() {
                       <Button
                         onClick={handleCreateSession}
                         disabled={!githubUrl.trim() || isCreatingSession}
-                        colorScheme="blue"
+                        colorScheme="purple"
                         size="lg"
                         w="full"
                         mt={4}
@@ -600,7 +600,7 @@ function CodeSearch() {
                         bg="white"
                         borderRadius="2xl"
                         borderColor="gray.200"
-                        _hover={{ bg: "blue.50", borderColor: "blue.300" }}
+                        _hover={{ bg: "purple.50", borderColor: "purple.300" }}
                       >
                         <FiGithub size={14} />
                         {repo}
@@ -743,7 +743,7 @@ function CodeSearch() {
                 <Button
                   onClick={handleSearch}
                   disabled={!query.trim() || isSearching}
-                  colorScheme="blue"
+                  colorScheme="purple"
                   size="sm"
                 >
                   <FiSearch />
