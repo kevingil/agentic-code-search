@@ -18,26 +18,8 @@ import {
 import { FiSearch, FiUser, FiTrash2, FiMessageSquare, FiGithub, FiPlus, FiEdit3, FiExternalLink } from "react-icons/fi"
 
 import { Button } from "@/components/ui/button"
-import { agentService, type AgentQueryRequest, type StreamChunk, type CodeSearchSession } from "@/services/agentService"
+import { agentService, type AgentQueryRequest, type StreamChunk, type CodeSearchSession, type Message } from "@/services/agentService"
 import Logo from "/assets/images/code-search-logo.png"
-
-interface Message {
-  id: string
-  type: "user" | "agent"
-  content: string
-  timestamp: Date
-  status: "sending" | "streaming" | "complete" | "error"
-  metadata?: {
-    response_type?: string
-    is_task_complete?: boolean
-    require_user_input?: boolean
-    artifacts?: any[]
-    parsed_content?: {
-      type: 'input_required' | 'artifact' | 'message'
-      data: any
-    }
-  }
-}
 
 // Utility function to extract repo name from GitHub URL
 const extractRepoNameFromUrl = (url: string): string | null => {
@@ -79,6 +61,7 @@ function CodeSearch() {
   const [query, setQuery] = useState("")
   const [isSearching, setIsSearching] = useState(false)
   const [currentSession, setCurrentSession] = useState<CodeSearchSession | null>(null)
+  const [currentSessionMessages, setCurrentSessionMessages] = useState<Message[]>([])
   const [availableAgents, setAvailableAgents] = useState<string[]>([])
   const [githubUrl, setGithubUrl] = useState("")
   const [urlError, setUrlError] = useState<string | null>(null)
@@ -88,7 +71,7 @@ function CodeSearch() {
   // Scroll to bottom when new messages are added
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [currentSession?.messages])
+  }, [currentSessionMessages])
 
   // Load available agents and session on component mount
   useEffect(() => {
@@ -104,6 +87,7 @@ function CodeSearch() {
         loadSessionById(sessionId)
       } else {
         setCurrentSession(null)
+        setCurrentSessionMessages([])
       }
     }
 
@@ -114,9 +98,13 @@ function CodeSearch() {
         const updatedSession = await agentService.getSession(currentSession.id)
         if (updatedSession) {
           setCurrentSession(updatedSession)
+          // Also refresh messages
+          const messages = agentService.getSessionMessages(currentSession.id)
+          setCurrentSessionMessages(messages)
         } else {
           // Session was deleted
           setCurrentSession(null)
+          setCurrentSessionMessages([])
         }
       }
     }
@@ -124,6 +112,7 @@ function CodeSearch() {
     // Listen for repo picker requests from sidebar
     const handleShowRepoPicker = () => {
       setCurrentSession(null)
+      setCurrentSessionMessages([])
       // Clear any form state
       setGithubUrl("")
       setUrlError(null)
@@ -154,11 +143,23 @@ function CodeSearch() {
   const loadCurrentSession = () => {
     const activeSession = agentService.getActiveSession()
     setCurrentSession(activeSession)
+    if (activeSession) {
+      const messages = agentService.getSessionMessages(activeSession.id)
+      setCurrentSessionMessages(messages)
+    } else {
+      setCurrentSessionMessages([])
+    }
   }
 
   const loadSessionById = async (sessionId: string) => {
     const session = await agentService.getSession(sessionId)
-    setCurrentSession(session)
+    if (session) {
+      // Set session metadata only
+      setCurrentSession(session)
+      // Set messages separately from local cache
+      const messages = agentService.getSessionMessages(sessionId)
+      setCurrentSessionMessages(messages)
+    }
   }
 
   const handleCreateSession = async () => {
@@ -189,6 +190,7 @@ function CodeSearch() {
       )
       
       setCurrentSession(session)
+      setCurrentSessionMessages([])
       setGithubUrl("")
       
       // Notify sidebar and other components about session changes
@@ -210,6 +212,7 @@ function CodeSearch() {
         "orchestrator"
       )
       setCurrentSession(session)
+      setCurrentSessionMessages([])
       
       // Notify sidebar and other components about session changes
       window.dispatchEvent(new CustomEvent('sessionChanged', { detail: { sessionId: session.id } }))
@@ -266,15 +269,10 @@ function CodeSearch() {
       metadata: { artifacts: [] },
     }
 
-    // Add messages to session
+    // Add messages to local cache and state
     agentService.addMessageToSession(currentSession.id, userMessage)
     agentService.addMessageToSession(currentSession.id, agentMessage)
-
-    // Update local state
-    setCurrentSession(prev => prev ? {
-      ...prev,
-      messages: [...prev.messages, userMessage, agentMessage]
-    } : null)
+    setCurrentSessionMessages(prev => [...prev, userMessage, agentMessage])
 
     // Notify sidebar about session updates
     window.dispatchEvent(new CustomEvent('sessionListChanged'))
@@ -297,7 +295,10 @@ function CodeSearch() {
 
       for await (const chunk of agentService.streamAgentQuery(request)) {
         if (chunk.error) {
-          throw new Error(chunk.error)
+          // Parse error object properly
+          const error = chunk.error as any
+          const errorMsg = error?.error?.message || error?.message || JSON.stringify(error)
+          throw new Error(errorMsg)
         }
 
         if (chunk.content) {
@@ -324,12 +325,11 @@ function CodeSearch() {
 
         agentService.updateMessageInSession(currentSession.id, agentMessageId, updatedMessage)
         
-        setCurrentSession(prev => prev ? {
-          ...prev,
-          messages: prev.messages.map(msg =>
+        setCurrentSessionMessages(prev => 
+          prev.map((msg: Message) =>
             msg.id === agentMessageId ? { ...msg, ...updatedMessage } : msg
           )
-        } : null)
+        )
       }
 
       // Final update
@@ -346,12 +346,11 @@ function CodeSearch() {
 
       agentService.updateMessageInSession(currentSession.id, agentMessageId, finalMessage)
       
-      setCurrentSession(prev => prev ? {
-        ...prev,
-        messages: prev.messages.map(msg =>
+      setCurrentSessionMessages(prev => 
+        prev.map((msg: Message) =>
           msg.id === agentMessageId ? { ...msg, ...finalMessage } : msg
         )
-      } : null)
+      )
 
       // Notify sidebar about session updates
       window.dispatchEvent(new CustomEvent('sessionListChanged'))
@@ -367,12 +366,11 @@ function CodeSearch() {
 
       agentService.updateMessageInSession(currentSession.id, agentMessageId, errorMessage)
       
-      setCurrentSession(prev => prev ? {
-        ...prev,
-        messages: prev.messages.map(msg =>
+      setCurrentSessionMessages(prev => 
+        prev.map((msg: Message) =>
           msg.id === agentMessageId ? { ...msg, ...errorMessage } : msg
         )
-      } : null)
+      )
 
       // Notify sidebar about session updates
       window.dispatchEvent(new CustomEvent('sessionListChanged'))
@@ -506,10 +504,10 @@ function CodeSearch() {
   const handleClearConversation = async () => {
     if (!currentSession) return
 
-    try {
-      await agentService.clearAgentContext(currentSession.id)
-      agentService.updateSession(currentSession.id, { messages: [] })
-      setCurrentSession(prev => prev ? { ...prev, messages: [] } : null)
+          try {
+        await agentService.clearAgentContext(currentSession.id)
+        agentService.clearSessionMessages(currentSession.id)
+        setCurrentSessionMessages([])
       
       // Notify sidebar about session updates
       window.dispatchEvent(new CustomEvent('sessionListChanged'))
@@ -712,7 +710,7 @@ function CodeSearch() {
           {textContent && (
             <Text whiteSpace="pre-wrap">{textContent}</Text>
           )}
-          {artifacts.map(artifact => renderArtifact(artifact))}
+          {artifacts.map((artifact: any) => renderArtifact(artifact))}
         </VStack>
       )
     }
@@ -780,7 +778,7 @@ function CodeSearch() {
               onClick={handleClearConversation}
               variant="ghost"
               size="sm"
-              disabled={currentSession.messages.length === 0}
+              disabled={currentSessionMessages.length === 0}
               aria-label="Clear Conversation"
               title="Clear Conversation"
             >
@@ -916,7 +914,7 @@ function CodeSearch() {
         {currentSession && (
           <Box h="full" overflow="auto" pb="210px" px={4}>
             <Box maxW="4xl" mx="auto" py={4}>
-              {currentSession.messages.length === 0 ? (
+              {currentSessionMessages.length === 0 ? (
                 <Box textAlign="center" py={12}>
                   <VStack gap={4}>
                     <FiMessageSquare size={48} color="gray.300" />
@@ -930,8 +928,8 @@ function CodeSearch() {
                 </Box>
               ) : (
                 <VStack gap={4} align="stretch">
-                  {currentSession.messages.map((message, index) => (
-                    <Box key={message.id} mb={index === currentSession.messages.length - 1 ? 0 : 6}>
+                  {currentSessionMessages.map((message: Message, index: number) => (
+                    <Box key={message.id} mb={index === currentSessionMessages.length - 1 ? 0 : 6}>
                       <HStack justify="space-between" mb={2}>
                         <HStack>
                           {message.type === "user" ? <FiUser /> : <FiMessageSquare />}

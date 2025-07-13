@@ -32,6 +32,15 @@ export interface StreamChunk {
   error?: string
 }
 
+export interface Message {
+  id: string
+  type: "user" | "agent"
+  content: string
+  timestamp: Date
+  status: "sending" | "streaming" | "complete" | "error"
+  metadata?: any
+}
+
 export interface CodeSearchSession {
   id: string
   name: string
@@ -43,14 +52,7 @@ export interface CodeSearchSession {
   vector_embeddings_processed: boolean
   updated_at: Date
   owner_id: string
-  messages: Array<{
-    id: string
-    type: "user" | "agent"
-    content: string
-    timestamp: Date
-    status: "sending" | "streaming" | "complete" | "error"
-    metadata?: any
-  }>
+  
 }
 
 export interface CodeSearchSessionCreate {
@@ -76,6 +78,7 @@ class AgentService {
   private baseURL: string
   private activeSessionId: string | null = null
   private sessionsCache: CodeSearchSession[] = []
+  private messagesCache: Map<string, Message[]> = new Map() // sessionId -> messages
 
   constructor() {
     this.baseURL = OpenAPI.BASE || "http://localhost:8000"
@@ -205,8 +208,7 @@ class AgentService {
         ...session,
         created_at: new Date(session.created_at),
         last_used: new Date(session.last_used),
-        updated_at: new Date(session.updated_at),
-        messages: [] // Messages are handled separately for now
+        updated_at: new Date(session.updated_at)
       }))
       return this.sessionsCache
     } catch (error) {
@@ -255,8 +257,7 @@ class AgentService {
         ...session,
         created_at: new Date(session.created_at),
         last_used: new Date(session.last_used),
-        updated_at: new Date(session.updated_at),
-        messages: []
+        updated_at: new Date(session.updated_at)
       }
     } catch (error) {
       console.error("Failed to get session:", error)
@@ -279,7 +280,6 @@ class AgentService {
           created_at: new Date(session.created_at),
           last_used: new Date(session.last_used),
           updated_at: new Date(session.updated_at),
-          messages: this.sessionsCache[index].messages
         }
       }
     } catch (error) {
@@ -337,26 +337,37 @@ class AgentService {
     return this.sessionsCache.find(s => s.id === this.activeSessionId) || null
   }
 
-  // In-memory message management (for now - could be moved to backend later)
-  addMessageToSession(sessionId: string, message: CodeSearchSession['messages'][0]): void {
+  // In-memory message management based on session ID
+  getSessionMessages(sessionId: string): Message[] {
+    return this.messagesCache.get(sessionId) || []
+  }
+
+  addMessageToSession(sessionId: string, message: Message): void {
+    const messages = this.messagesCache.get(sessionId) || []
+    messages.push(message)
+    this.messagesCache.set(sessionId, messages)
+    
+    // Update session last_used time
     const session = this.sessionsCache.find(s => s.id === sessionId)
     if (session) {
-      session.messages.push(message)
       session.last_used = new Date()
     }
   }
 
-  updateMessageInSession(sessionId: string, messageId: string, updates: Partial<CodeSearchSession['messages'][0]>): void {
-    const session = this.sessionsCache.find(s => s.id === sessionId)
-    if (session) {
-      const messageIndex = session.messages.findIndex(m => m.id === messageId)
-      if (messageIndex !== -1) {
-        session.messages[messageIndex] = {
-          ...session.messages[messageIndex],
-          ...updates
-        }
+  updateMessageInSession(sessionId: string, messageId: string, updates: Partial<Message>): void {
+    const messages = this.messagesCache.get(sessionId) || []
+    const messageIndex = messages.findIndex(m => m.id === messageId)
+    if (messageIndex !== -1) {
+      messages[messageIndex] = {
+        ...messages[messageIndex],
+        ...updates
       }
+      this.messagesCache.set(sessionId, messages)
     }
+  }
+
+  clearSessionMessages(sessionId: string): void {
+    this.messagesCache.delete(sessionId)
   }
 }
 
