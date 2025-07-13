@@ -23,7 +23,6 @@ function Navbar() {
     >
       <Link to={logoLink}>
         <div style={{ display: "flex", alignItems: "center", gap: "2px", cursor: "pointer" }}>
-          <Image src={Logo} alt="Logo" w="50px" p={0} />
           <p style={{ color: "#33025b", fontSize: "1.5rem", fontWeight: "bold", cursor: "pointer" }}>Code Search</p>
         </div>
       </Link>
