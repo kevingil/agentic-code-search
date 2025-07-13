@@ -5,9 +5,12 @@ import sqlite3
 import traceback
 import zipfile
 import io
+import uuid
+import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
+from typing import Optional, List, Dict, Any
 import google.generativeai as genai
 import numpy as np
 import pandas as pd
@@ -16,12 +19,14 @@ import tempfile
 from ..mcp_config import mcp_settings
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.utilities.logging import get_logger
-import psycopg2
+from .db_connection import VectorSearchService
 
 logger = get_logger(__name__)
 # Calculate the path to agent_cards directory relative to this file
 AGENT_CARDS_DIR = Path(__file__).parent.parent.parent.parent / "agent_cards"
 MODEL = "models/embedding-001"
+# Use the same embedding model as the main app for consistency
+VECTOR_EMBEDDING_MODEL = "models/text-embedding-004"
 SQLLITE_DB = Path(__file__).parent.parent.parent.parent.parent.parent / "code_search.db"
 ALLOWED_EXTENSIONS = {".py", ".js", ".ts", ".java", ".c", ".cpp", ".go", ".rb"}
 
@@ -142,6 +147,9 @@ def serve(host, port, transport):  # noqa: PLR0915
     mcp = FastMCP("agent-cards", host=host, port=port)
 
     df = build_agent_card_embeddings()
+    
+    # Initialize vector search service for code embeddings
+    vector_search_service = VectorSearchService()
 
     @mcp.tool(
         name="find_agent",
@@ -635,47 +643,6 @@ def serve(host, port, transport):  # noqa: PLR0915
         return zipfile.ZipFile(io.BytesIO(response.content))
 
     @mcp.tool()
-    def save_repo_to_vector_db(zip_file: zipfile.ZipFile) -> str:
-        """Save repository content to a vector database."""
-        try:
-            conn = psycopg2.connect(
-                dbname=mcp_settings.DB_NAME,
-                user=mcp_settings.DB_USER,
-                password=mcp_settings.DB_PASSWORD,
-                host=mcp_settings.DB_HOST,
-                port=mcp_settings.DB_PORT,
-                sslmode=mcp_settings.DB_SSLMODE,
-            )
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS REPO_EMBEDDINGS (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    file_name TEXT,
-                    content TEXT,
-                    embedding BLOB
-                )
-                """
-            )
-
-            for file_info in zip_file.infolist():
-                if not file_info.is_dir() and file_info.filename.endswith(".py"):
-                    with zip_file.open(file_info) as f:
-                        content = f.read().decode("utf-8")
-                        embedding = generate_embeddings(content)
-                        cursor.execute(
-                            "INSERT INTO repo_files (file_name, content, embedding) VALUES (?, ?, ?)",
-                            (file_info.filename, content, json.dumps(embedding)),
-                        )
-
-            conn.commit()
-            conn.close()
-            return "Repository saved to vector database successfully."
-        except Exception as e:
-            logger.error(f"Error saving repo to vector DB: {e}")
-            return f"Error saving repo to vector DB: {e}"
-
-    @mcp.tool()
     def extract_text_files(zip_file: zipfile.ZipFile) -> dict:
         """Extract text/code files from the ZIP and return as {filename: content}"""
         file_contents = {}
@@ -697,6 +664,240 @@ def serve(host, port, transport):  # noqa: PLR0915
                         except Exception:
                             pass  # Skip unreadable files
         return file_contents
+
+    @mcp.tool(
+        name="vector_search_code",
+        description="Search for similar code chunks using natural language queries. Uses vector embeddings to find semantically similar code across all processed repositories."
+    )
+    def vector_search_code(
+        query: str,
+        session_id: Optional[str] = None,
+        limit: int = 10,
+        similarity_threshold: float = 0.7
+    ) -> str:
+        """
+        Search for similar code chunks using vector embeddings.
+        
+        Args:
+            query: Natural language description of what you're looking for
+            session_id: Optional UUID of specific session to search within
+            limit: Maximum number of results (default: 10, max: 50)
+            similarity_threshold: Minimum similarity score 0-1 (default: 0.7)
+            
+        Returns:
+            JSON string with search results including code snippets and metadata
+        """
+        try:
+            # Validate inputs
+            limit = min(max(1, limit), 50)  # Clamp between 1 and 50
+            similarity_threshold = max(0.0, min(1.0, similarity_threshold))  # Clamp between 0 and 1
+            
+            # Parse session_id if provided
+            session_uuid = None
+            if session_id:
+                try:
+                    session_uuid = uuid.UUID(session_id)
+                except ValueError:
+                    return json.dumps({"error": "Invalid session_id format. Must be a valid UUID."})
+            
+            # Generate embedding for the query
+            query_embedding = genai.embed_content(
+                model=VECTOR_EMBEDDING_MODEL,
+                content=query,
+                output_dimensionality=768
+            )
+            
+            # Perform the search
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                results = loop.run_until_complete(
+                    vector_search_service.search_similar_code(
+                        query_embedding=query_embedding['embedding'],
+                        session_id=session_uuid,
+                        limit=limit,
+                        similarity_threshold=similarity_threshold
+                    )
+                )
+            finally:
+                loop.close()
+            
+            # Format results
+            response = {
+                "query": query,
+                "total_results": len(results),
+                "similarity_threshold": similarity_threshold,
+                "results": results
+            }
+            
+            return json.dumps(response, indent=2)
+            
+        except Exception as e:
+            logger.error(f"Error in vector_search_code: {e}")
+            return json.dumps({"error": f"Search failed: {str(e)}"})
+
+    @mcp.tool(
+        name="list_code_sessions",
+        description="List all code search sessions that have processed vector embeddings."
+    )
+    def list_code_sessions() -> str:
+        """
+        Get all sessions that have vector embeddings processed.
+        
+        Returns:
+            JSON string with list of sessions and their metadata
+        """
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                sessions = loop.run_until_complete(
+                    vector_search_service.get_sessions_with_embeddings()
+                )
+            finally:
+                loop.close()
+            
+            response = {
+                "total_sessions": len(sessions),
+                "sessions": sessions
+            }
+            
+            return json.dumps(response, indent=2)
+            
+        except Exception as e:
+            logger.error(f"Error in list_code_sessions: {e}")
+            return json.dumps({"error": f"Failed to get sessions: {str(e)}"})
+
+    @mcp.tool(
+        name="get_session_files",
+        description="Get all files and their chunk information for a specific code search session."
+    )
+    def get_session_files(session_id: str) -> str:
+        """
+        Get all files and their chunk information for a specific session.
+        
+        Args:
+            session_id: UUID of the session to get files for
+            
+        Returns:
+            JSON string with file information and chunk statistics
+        """
+        try:
+            # Parse session_id
+            try:
+                session_uuid = uuid.UUID(session_id)
+            except ValueError:
+                return json.dumps({"error": "Invalid session_id format. Must be a valid UUID."})
+            
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                files = loop.run_until_complete(
+                    vector_search_service.get_session_files(session_uuid)
+                )
+            finally:
+                loop.close()
+            
+            response = {
+                "session_id": session_id,
+                "total_files": len(files),
+                "files": files
+            }
+            
+            return json.dumps(response, indent=2)
+            
+        except Exception as e:
+            logger.error(f"Error in get_session_files: {e}")
+            return json.dumps({"error": f"Failed to get session files: {str(e)}"})
+
+    @mcp.tool(
+        name="search_code_by_file_path",
+        description="Search for code chunks by file path pattern. Useful for finding specific files or file types."
+    )
+    def search_code_by_file_path(
+        file_path_pattern: str,
+        session_id: Optional[str] = None
+    ) -> str:
+        """
+        Search for code chunks by file path pattern.
+        
+        Args:
+            file_path_pattern: SQL LIKE pattern for file paths (use % for wildcards)
+            session_id: Optional UUID of specific session to search within
+            
+        Returns:
+            JSON string with matching code chunks
+        """
+        try:
+            # Parse session_id if provided
+            session_uuid = None
+            if session_id:
+                try:
+                    session_uuid = uuid.UUID(session_id)
+                except ValueError:
+                    return json.dumps({"error": "Invalid session_id format. Must be a valid UUID."})
+            
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                results = loop.run_until_complete(
+                    vector_search_service.search_by_file_path(
+                        file_path_pattern=file_path_pattern,
+                        session_id=session_uuid
+                    )
+                )
+            finally:
+                loop.close()
+            
+            response = {
+                "file_path_pattern": file_path_pattern,
+                "total_results": len(results),
+                "results": results
+            }
+            
+            return json.dumps(response, indent=2)
+            
+        except Exception as e:
+            logger.error(f"Error in search_code_by_file_path: {e}")
+            return json.dumps({"error": f"Failed to search by file path: {str(e)}"})
+
+    @mcp.tool(
+        name="generate_query_embedding",
+        description="Generate an embedding vector for a text query. Useful for understanding how the vector search works."
+    )
+    def generate_query_embedding(text: str) -> str:
+        """
+        Generate an embedding vector for a text query.
+        
+        Args:
+            text: The text to generate an embedding for
+            
+        Returns:
+            JSON string with the embedding vector and metadata
+        """
+        try:
+            # Generate embedding
+            response = genai.embed_content(
+                model=VECTOR_EMBEDDING_MODEL,
+                content=text,
+                output_dimensionality=768
+            )
+            
+            embedding = response['embedding']
+            
+            result = {
+                "text": text,
+                "model": VECTOR_EMBEDDING_MODEL,
+                "embedding_dimension": len(embedding),
+                "embedding": embedding[:10],  # Show first 10 dimensions for brevity
+                "embedding_norm": float(np.linalg.norm(embedding))
+            }
+            
+            return json.dumps(result, indent=2)
+            
+        except Exception as e:
+            logger.error(f"Error in generate_query_embedding: {e}")
+            return json.dumps({"error": f"Failed to generate embedding: {str(e)}"})
 
     @mcp.resource("resource://agent_cards/list", mime_type="application/json")
     def get_agent_cards() -> dict:
