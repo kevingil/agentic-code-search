@@ -2,7 +2,7 @@ import { Flex, Image, useBreakpointValue } from "@chakra-ui/react"
 import { Link } from "@tanstack/react-router"
 
 import { isLoggedIn } from "@/hooks/useAuth"
-import Logo from "/assets/images/fastapi-logo.svg"
+import Logo from "/assets/images/code-search-logo.png"
 import UserMenu from "./UserMenu"
 
 function Navbar() {
@@ -22,7 +22,10 @@ function Navbar() {
       p={4}
     >
       <Link to={logoLink}>
-        <Image src={Logo} alt="Logo" maxW="3xs" p={2} />
+        <div style={{ display: "flex", alignItems: "center", gap: "2px", cursor: "pointer" }}>
+          <Image src={Logo} alt="Logo" w="50px" p={0} />
+          <p style={{ color: "#33025b", fontSize: "1.5rem", fontWeight: "bold", cursor: "pointer" }}>Code Search</p>
+        </div>
       </Link>
       <Flex gap={2} alignItems="center">
         <UserMenu />

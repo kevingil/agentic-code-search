@@ -13,11 +13,13 @@ import {
   Spinner,
   Link,
   IconButton,
+  Image,
 } from "@chakra-ui/react"
 import { FiSearch, FiUser, FiTrash2, FiMessageSquare, FiGithub, FiPlus, FiEdit3, FiExternalLink } from "react-icons/fi"
 
 import { Button } from "@/components/ui/button"
 import { agentService, type AgentQueryRequest, type StreamChunk, type CodeSearchSession } from "@/services/agentService"
+import Logo from "/assets/images/code-search-logo.png"
 
 interface Message {
   id: string
@@ -489,12 +491,15 @@ function CodeSearch() {
         <VStack gap={8} align="stretch">
           {/* Header */}
           <Box textAlign="center" mb={8}>
-            <Heading size="xl" mb={4}>
-              Agentic Code Search
-            </Heading>
-            <Text fontSize="lg" color="gray.600">
-              Ask questions about your codebase and let our AI agent find the answers
-            </Text>
+            <VStack gap={4} align="center">
+              <Image src={Logo} alt="Code Search Logo" h="200px" />
+              <Heading size="xl" color="#33025b">
+                Agentic Code Search
+              </Heading>
+              <Text fontSize="lg" color="gray.600">
+                Ask questions about your codebase and let our AI agent find the answers
+              </Text>
+            </VStack>
           </Box>
 
           {/* Repo Picker - shown when no session is active */}
