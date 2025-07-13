@@ -148,8 +148,14 @@ def serve(host, port, transport):  # noqa: PLR0915
 
     df = build_agent_card_embeddings()
     
-    # Initialize vector search service for code embeddings
-    vector_search_service = VectorSearchService()
+    # Initialize vector search service for code embeddings (if database is configured)
+    vector_search_service = None
+    try:
+        vector_search_service = VectorSearchService()
+        logger.info("Vector search service initialized successfully")
+    except RuntimeError as e:
+        logger.warning(f"Vector search service not available: {e}")
+        vector_search_service = None
 
     @mcp.tool(
         name="find_agent",
@@ -688,6 +694,12 @@ def serve(host, port, transport):  # noqa: PLR0915
             JSON string with search results including code snippets and metadata
         """
         try:
+            # Check if vector search service is available
+            if not vector_search_service:
+                return json.dumps({
+                    "error": "Vector search not available. Please configure database connection with POSTGRES_USER, POSTGRES_PASSWORD, and POSTGRES_DB environment variables."
+                })
+            
             # Validate inputs
             limit = min(max(1, limit), 50)  # Clamp between 1 and 50
             similarity_threshold = max(0.0, min(1.0, similarity_threshold))  # Clamp between 0 and 1
@@ -748,6 +760,12 @@ def serve(host, port, transport):  # noqa: PLR0915
             JSON string with list of sessions and their metadata
         """
         try:
+            # Check if vector search service is available
+            if not vector_search_service:
+                return json.dumps({
+                    "error": "Vector search not available. Please configure database connection with POSTGRES_USER, POSTGRES_PASSWORD, and POSTGRES_DB environment variables."
+                })
+            
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
@@ -783,6 +801,12 @@ def serve(host, port, transport):  # noqa: PLR0915
             JSON string with file information and chunk statistics
         """
         try:
+            # Check if vector search service is available
+            if not vector_search_service:
+                return json.dumps({
+                    "error": "Vector search not available. Please configure database connection with POSTGRES_USER, POSTGRES_PASSWORD, and POSTGRES_DB environment variables."
+                })
+            
             # Parse session_id
             try:
                 session_uuid = uuid.UUID(session_id)
@@ -829,6 +853,12 @@ def serve(host, port, transport):  # noqa: PLR0915
             JSON string with matching code chunks
         """
         try:
+            # Check if vector search service is available
+            if not vector_search_service:
+                return json.dumps({
+                    "error": "Vector search not available. Please configure database connection with POSTGRES_USER, POSTGRES_PASSWORD, and POSTGRES_DB environment variables."
+                })
+            
             # Parse session_id if provided
             session_uuid = None
             if session_id:

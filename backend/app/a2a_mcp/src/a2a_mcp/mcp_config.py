@@ -6,6 +6,7 @@ This is a standalone configuration separate from the main app.
 
 import os
 from pathlib import Path
+from typing import Optional
 from pydantic import BaseModel, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic_core import MultiHostUrl
@@ -28,17 +29,19 @@ class MCPServerSettings(BaseSettings):
     # Google API Key for AI services
     GOOGLE_API_KEY: str
     
-    # Database configuration for PostgreSQL
+    # Database configuration for PostgreSQL (optional - only needed for vector search tools)
     POSTGRES_SERVER: str = "localhost"
     POSTGRES_PORT: int = 5432
-    POSTGRES_USER: str
-    POSTGRES_PASSWORD: str
-    POSTGRES_DB: str
+    POSTGRES_USER: Optional[str] = None
+    POSTGRES_PASSWORD: Optional[str] = None
+    POSTGRES_DB: Optional[str] = None
 
     @computed_field  # type: ignore[prop-decorator]
     @property
-    def DATABASE_URI(self) -> PostgresDsn:
-        """Build the database URI for SQLAlchemy."""
+    def DATABASE_URI(self) -> Optional[PostgresDsn]:
+        """Build the database URI for SQLAlchemy. Returns None if database config is incomplete."""
+        if not all([self.POSTGRES_USER, self.POSTGRES_PASSWORD, self.POSTGRES_DB]):
+            return None
         return MultiHostUrl.build(
             scheme="postgresql+psycopg",
             username=self.POSTGRES_USER,

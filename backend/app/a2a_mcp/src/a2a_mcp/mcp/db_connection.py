@@ -14,12 +14,19 @@ from ..mcp_config import mcp_settings
 
 logger = logging.getLogger(__name__)
 
-# Create engine for the MCP server
-mcp_engine = create_engine(str(mcp_settings.DATABASE_URI))
+# Create engine for the MCP server (only if database config is available)
+mcp_engine = None
+if mcp_settings.DATABASE_URI:
+    mcp_engine = create_engine(str(mcp_settings.DATABASE_URI))
 
 
 def get_mcp_session():
     """Get a database session for the MCP server."""
+    if not mcp_engine:
+        raise RuntimeError(
+            "Database not configured. Please set POSTGRES_USER, POSTGRES_PASSWORD, "
+            "and POSTGRES_DB environment variables to use vector search tools."
+        )
     return Session(mcp_engine)
 
 
@@ -27,6 +34,11 @@ class VectorSearchService:
     """Service for performing vector search on code embeddings."""
     
     def __init__(self):
+        if not mcp_engine:
+            raise RuntimeError(
+                "Database not configured. Please set POSTGRES_USER, POSTGRES_PASSWORD, "
+                "and POSTGRES_DB environment variables to use vector search tools."
+            )
         self.engine = mcp_engine
     
     async def search_similar_code(
