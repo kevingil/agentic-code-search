@@ -21,8 +21,8 @@ from google.genai import types as genai_types
 logger = logging.getLogger(__name__)
 
 
-class TravelAgent(BaseAgent):
-    """Travel Agent backed by ADK."""
+class CodeSearchAgent(BaseAgent):
+    """Code Search Agent backed by ADK."""
 
     def __init__(self, agent_name: str, description: str, instructions: str):
         init_api_key()
@@ -45,12 +45,15 @@ class TravelAgent(BaseAgent):
         logger.info(f'Initializing {self.agent_name} metadata')
         config = get_mcp_server_config()
         logger.info(f'MCP Server url={config.url}')
+        
+        # Get tools from MCP server
         tools = await MCPToolset(
             connection_params=SseServerParams(url=config.url)
         ).get_tools()
 
         for tool in tools:
-            logger.info(f'Loaded tools {tool.name}')
+            logger.info(f'Loaded tool {tool.name}')
+        
         generate_content_config = genai_types.GenerateContentConfig(
             temperature=0.0
         )
@@ -68,7 +71,7 @@ class TravelAgent(BaseAgent):
     async def invoke(self, query, session_id) -> dict:
         logger.info(f'Running {self.agent_name} for session {session_id}')
 
-        raise NotImplementedError('Please use the streraming function')
+        raise NotImplementedError('Please use the streaming function')
 
     async def stream(
         self, query, context_id, task_id
@@ -82,6 +85,7 @@ class TravelAgent(BaseAgent):
 
         if not self.agent:
             await self.init_agent()
+        
         async for chunk in self.runner.run_stream(
             self.agent, query, context_id
         ):
@@ -142,7 +146,7 @@ class TravelAgent(BaseAgent):
                         'response_type': 'text',
                         'is_task_complete': True,
                         'require_user_input': False,
-                        'content': 'Task completed successfully.',
+                        'content': 'Code search task completed successfully.',
                     }
                 
                 # Try to parse as JSON
@@ -168,7 +172,7 @@ class TravelAgent(BaseAgent):
                 'response_type': 'text',
                 'is_task_complete': True,
                 'require_user_input': False,
-                'content': str(data) if data is not None else 'Task completed successfully.',
+                'content': str(data) if data is not None else 'Code search task completed successfully.',
             }
         except Exception as e:
             logger.error(f'Error in get_agent_response: {e}')
@@ -176,5 +180,5 @@ class TravelAgent(BaseAgent):
                 'response_type': 'text',
                 'is_task_complete': True,
                 'require_user_input': False,
-                'content': 'Could not complete booking / task. Please try again.',
+                'content': 'Could not complete code search task. Please try again.',
             }

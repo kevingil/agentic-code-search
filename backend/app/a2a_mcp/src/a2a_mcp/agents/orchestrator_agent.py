@@ -32,13 +32,13 @@ class OrchestratorAgent(BaseAgent):
             
         super().__init__(
             agent_name='Orchestrator Agent',
-            description='Facilitate inter agent communication',
+            description='Coordinate complex code search and analysis workflows',
             content_types=['text', 'text/plain'],
         )
         
         self.graph = None
         self.results = []
-        self.travel_context = {}
+        self.code_search_context = {}
         self.query_history = []
         self.context_id = None
 
@@ -47,7 +47,7 @@ class OrchestratorAgent(BaseAgent):
         response = client.models.generate_content(
             model='gemini-2.0-flash',
             contents=prompts.SUMMARY_COT_INSTRUCTIONS.replace(
-                '{travel_data}', str(self.results)
+                '{code_search_data}', str(self.results)
             ),
             config={'temperature': 0.0},
         )
@@ -59,10 +59,10 @@ class OrchestratorAgent(BaseAgent):
             response = client.models.generate_content(
                 model='gemini-2.0-flash',
                 contents=prompts.QA_COT_PROMPT.replace(
-                    '{TRIP_CONTEXT}', str(self.travel_context)
+                    '{CODE_SEARCH_CONTEXT}', str(self.code_search_context)
                 )
                 .replace('{CONVERSATION_HISTORY}', str(self.query_history))
-                .replace('{TRIP_QUESTION}', question),
+                .replace('{CODE_QUESTION}', question),
                 config={
                     'temperature': 0.0,
                     'response_mime_type': 'application/json',
@@ -108,7 +108,7 @@ class OrchestratorAgent(BaseAgent):
     def clear_state(self):
         self.graph = None
         self.results.clear()
-        self.travel_context.clear()
+        self.code_search_context.clear()
         self.query_history.clear()
 
     async def stream(
@@ -205,8 +205,8 @@ class OrchestratorAgent(BaseAgent):
                         if artifact.name == 'PlannerAgent-result':
                             # Planning agent returned data, update graph.
                             artifact_data = artifact.parts[0].root.data
-                            if 'trip_info' in artifact_data:
-                                self.travel_context = artifact_data['trip_info']
+                            if 'code_search_info' in artifact_data:
+                                self.code_search_context = artifact_data['code_search_info']
                             logger.info(
                                 f'Updating workflow with {len(artifact_data["tasks"])} task nodes'
                             )
@@ -243,7 +243,7 @@ class OrchestratorAgent(BaseAgent):
                             'response_type': 'text',
                             'is_task_complete': False,
                             'require_user_input': False,
-                            'content': 'Processing request...'
+                            'content': 'Processing code search request...'
                         }
                         
                         # Try to extract more meaningful content if available
@@ -278,7 +278,7 @@ class OrchestratorAgent(BaseAgent):
                                 'response_type': 'text',
                                 'is_task_complete': False,
                                 'require_user_input': False,
-                                'content': 'Processing request...'
+                                'content': 'Processing code search request...'
                             }
             # The graph is complete and no updates, so okay to break from the loop.
             if not should_resume_workflow:

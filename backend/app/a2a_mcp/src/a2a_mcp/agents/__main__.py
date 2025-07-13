@@ -17,7 +17,7 @@ from a2a.server.tasks import BasePushNotificationSender, InMemoryPushNotificatio
 from a2a.types import AgentCard
 from ..common import prompts
 from ..common.agent_executor import GenericAgentExecutor
-from .adk_travel_agent import TravelAgent
+from .adk_travel_agent import CodeSearchAgent  # Renamed from TravelAgent
 from .langgraph_planner_agent import LangraphPlannerAgent
 from .orchestrator_agent import OrchestratorAgent
 
@@ -36,28 +36,27 @@ def get_agent(agent_card: AgentCard):
         if agent_card.name == 'Langraph Planner Agent':
             print(f"DEBUG: Initializing Langraph Planner Agent")
             return LangraphPlannerAgent()
-        if agent_card.name == 'Air Ticketing Agent':
-            print(f"DEBUG: Initializing Air Ticketing Agent")
-            return TravelAgent(
-                agent_name='AirTicketingAgent',
-                description='Book air tickets given a criteria',
-                instructions=prompts.AIRFARE_COT_INSTRUCTIONS,
+        if agent_card.name == 'Code Search Agent':
+            print(f"DEBUG: Initializing Code Search Agent")
+            return CodeSearchAgent(
+                agent_name='CodeSearchAgent',
+                description='Performs semantic code search and analysis across codebases',
+                instructions=prompts.CODE_SEARCH_INSTRUCTIONS,
             )
-        if agent_card.name == 'Hotel Booking Agent':
-            print(f"DEBUG: Initializing Hotel Booking Agent")
-            return TravelAgent(
-                agent_name='HotelBookingAgent',
-                description='Book hotels given a criteria',
-                instructions=prompts.HOTELS_COT_INSTRUCTIONS,
+        if agent_card.name == 'Code Analysis Agent':
+            print(f"DEBUG: Initializing Code Analysis Agent")
+            return CodeSearchAgent(
+                agent_name='CodeAnalysisAgent',
+                description='Performs static code analysis and code quality assessment',
+                instructions=prompts.CODE_ANALYSIS_INSTRUCTIONS,
             )
-        if agent_card.name == 'Car Rental Agent':
-            print(f"DEBUG: Initializing Car Rental Agent")
-            return TravelAgent(
-                agent_name='CarRentalBookingAgent',
-                description='Book rental cars given a criteria',
-                instructions=prompts.CARS_COT_INSTRUCTIONS,
+        if agent_card.name == 'Code Documentation Agent':
+            print(f"DEBUG: Initializing Code Documentation Agent")
+            return CodeSearchAgent(
+                agent_name='CodeDocumentationAgent',
+                description='Generates and analyzes code documentation and comments',
+                instructions=prompts.CODE_DOCUMENTATION_INSTRUCTIONS,
             )
-            # return LangraphCarRentalAgent()
     except Exception as e:
         print(f"DEBUG: Error creating agent: {e}")
         print(f"DEBUG: Error type: {type(e)}")
